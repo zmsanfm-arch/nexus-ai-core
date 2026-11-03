@@ -1,6 +1,6 @@
 # ICT Mentor Agent
 
-Status: **advisory specialist specification**. This directory does not register a running specialist in the NEXUS runtime.
+Status: **advisory runtime foundation implemented; production activation pending**. NEXUS now exposes a central invocation route and validates structured specialist output. The agent remains specification-state until model configuration, approved source corpus and runtime operational checks are complete.
 
 ## Purpose
 An evidence-grounded ICT education and trade-analysis specialist hosted by NEXUS AI CORE. It is not Michael J. Huddleston, is not endorsed by him, and must not claim to speak for him.
@@ -41,4 +41,4 @@ Install jsonschema>=4.21 and run from repository root:
 python -m unittest discover -s agents/ict_mentor/tests -v
 
 ## Readiness
-This remains a specification, not a deployed runtime agent. NEXUS must implement central manifest registration, routing, schema validation, permissions, and audit. Any future position/execution capability requires a separate NEXUS-led design, authorization, risk review, and release; it is not enabled by this specification.
+The advisory runtime adapter and central route are implemented. Knowledge retrieval currently uses a deterministic lexical baseline over ingested segments; embedding-based retrieval, production identity, operational monitoring, and an approved populated ICT corpus are still pending. The registry intentionally continues to report `specification` until these activation gates pass. Any future position/execution capability requires a separate NEXUS-led design, authorization, risk review, and release; it is not enabled by this specification.
