@@ -1,0 +1,12 @@
+agent_id: ict_mentor
+name: ICT Mentor
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - ict.education
+  - ict.source_lookup
+  - ict.chart_analysis
+  - ict.strategy_formalization
+  - ict.trade_review
+permissions: []
