@@ -48,7 +48,9 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        Base.metadata.create_all(self.engine)
+        # SQLite is a developer/test convenience. PostgreSQL schema changes are migration-owned.
+        if url.startswith("sqlite") or os.getenv("NEXUS_AUTO_CREATE_SCHEMA", "").lower() == "true":
+            Base.metadata.create_all(self.engine)
 
     def save_task(self, task: dict):
         with self._lock, self.sessions.begin() as session:
