@@ -32,7 +32,10 @@ def require_api_access(authorization: str | None = Header(default=None)) -> str:
         raise HTTPException(status_code=401, detail="Bearer authentication required")
     if not hmac.compare_digest(supplied_token, expected_token):
         raise HTTPException(status_code=403, detail="Invalid API credentials")
-    return "api-client"
+    principal_id = os.getenv("NEXUS_API_CLIENT_ID", "api-client")
+    if not principal_id or len(principal_id) > 128:
+        raise HTTPException(status_code=503, detail="API principal identity is invalid")
+    return principal_id
 
 
 def require_admin(authorization: str | None = Header(default=None)) -> str:
@@ -66,15 +69,15 @@ def list_agents(_: str = Depends(require_api_access)):
 @app.post("/tasks", response_model=TaskView)
 def create_task(
     payload: TaskCreate,
-    _: str = Depends(require_api_access),
+    principal_id: str = Depends(require_api_access),
 ):
-    return orchestrator.submit(payload.objective, payload.task_type, payload.context)
+    return orchestrator.submit(payload.objective, payload.task_type, payload.context, principal_id=principal_id)
 
 
 @app.get("/tasks/{task_id}", response_model=TaskView)
 def get_task(task_id: str, _: str = Depends(require_api_access)):
     task = store.get_task(task_id)
-    if not task:
+    if not task or task.get("principal_id", "api-client") != principal_id:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
