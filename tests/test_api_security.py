@@ -59,3 +59,45 @@ def test_approval_endpoint_fails_closed_when_not_configured(monkeypatch):
         json={"approved": True},
     )
     assert response.status_code == 503
+
+
+
+def test_agent_and_task_apis_require_api_bearer_token(monkeypatch):
+    monkeypatch.delenv("NEXUS_API_TOKEN", raising=False)
+    client = TestClient(app)
+
+    assert client.get("/agents").status_code == 503
+    assert client.post("/tasks", json={"objective": "Explain liquidity"}).status_code == 503
+    assert client.get("/tasks/unknown").status_code == 503
+
+
+def test_agent_api_rejects_invalid_api_token(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "valid-api-token")
+    response = TestClient(app).get(
+        "/agents",
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert response.status_code == 403
+
+
+def test_agent_api_accepts_configured_api_token(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "valid-api-token")
+    response = TestClient(app).get(
+        "/agents",
+        headers={"Authorization": "Bearer valid-api-token"},
+    )
+    assert response.status_code == 200
+    assert "agents" in response.json()
+
+
+def test_audit_endpoint_requires_admin_auth(client):
+    response = client.get("/audit")
+    assert response.status_code == 401
+
+
+def test_audit_endpoint_rejects_invalid_limit(client):
+    response = client.get(
+        "/audit?limit=501",
+        headers={"Authorization": "Bearer test-secret-token"},
+    )
+    assert response.status_code == 422
