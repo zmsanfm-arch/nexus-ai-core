@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus-ai-core.local/schemas/ict-mentor-output.schema.json",
+  "title": "ICT Mentor Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "mode",
+    "answer",
+    "source_claims",
+    "user_rules_used",
+    "agent_inferences",
+    "proposed_actions",
+    "risk_decision",
+    "execution_result",
+    "uncertainties"
+  ],
+  "properties": {
+    "agent_id": {
+      "const": "ict_mentor"
+    },
+    "mode": {
+      "const": "advisory"
+    },
+    "answer": {
+      "type": "string"
+    },
+    "source_claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "source_id",
+          "title",
+          "url",
+          "retrieved_at",
+          "segment_id"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "retrieved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "segment_id": {
+            "type": "string"
+          },
+          "timestamp_start": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp_end": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "user_rules_used": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "text"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "agent_inferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "inference",
+          "basis",
+          "confidence"
+        ],
+        "properties": {
+          "inference": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      }
+    },
+    "proposed_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "rationale",
+          "requires_central_review"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requires_central_review": {
+            "const": true
+          }
+        }
+      }
+    },
+    "risk_decision": {
+      "enum": [
+        "not_requested",
+        "not_assessed_by_specialist",
+        "refer_to_central_risk_engine",
+        "blocked_insufficient_information"
+      ]
+    },
+    "execution_result": {
+      "type": "null",
+      "description": "Always null in this release. ICT Mentor cannot execute or modify trades."
+    },
+    "uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
