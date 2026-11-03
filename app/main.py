@@ -72,7 +72,7 @@ def create_task(payload: TaskCreate):
 @app.get("/tasks/{task_id}", response_model=TaskView, dependencies=[Depends(authenticate)])
 def get_task(task_id: str):
     task = store.get_task(task_id)
-    if not task is None:
+    if task is not None:
         return task
     raise HTTPException(status_code=404, detail="Task not found")
 
