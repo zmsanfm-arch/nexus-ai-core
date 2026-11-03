@@ -23,8 +23,9 @@ def test_demo_activation_requires_kill_switch_and_monitoring():
         "monitoring_ready": True,
         "kill_switch_ready": False,
     }
-    with pytest.raises(ValueError, match="kill_switch_ready"):
-        assert_transition_allowed("demo_approved", "demo_active", evidence)
+    decision = evaluate_transition("demo_approved", "demo_active", evidence)
+    assert not decision.allowed
+    assert "Demo promotion is disabled" in decision.reason
 
 
 def test_active_strategy_can_be_suspended_with_reason():
