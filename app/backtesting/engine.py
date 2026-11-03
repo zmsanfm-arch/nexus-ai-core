@@ -92,8 +92,11 @@ def run_backtest(
     if len({bar.timestamp for bar in bars}) != len(bars):
         raise ValueError("Duplicate candle timestamps")
     results = []
+    last_exit_time = None
     for intent in sorted(intents, key=lambda item: (item.entry_time, item.trade_id)):
         _valid_intent(intent)
+        if last_exit_time is not None and intent.entry_time <= last_exit_time:
+            raise ValueError("Overlapping trade intents are not supported by this single-position engine")
         eligible = [bar for bar in bars if bar.timestamp >= intent.entry_time]
         if not eligible:
             continue
@@ -131,7 +134,10 @@ def run_backtest(
                     else:
                         exit_mid = max(intent.stop_price, bar.open)
                 else:
-                    exit_mid = intent.target_price
+                    if intent.direction == "long":
+                        exit_mid = max(intent.target_price, bar.open)
+                    else:
+                        exit_mid = min(intent.target_price, bar.open)
                 break
         if exit_bar is None:
             continue
@@ -144,6 +150,7 @@ def run_backtest(
         commission = config.costs.commission_per_unit_per_side * intent.quantity * 2
         spread_and_slippage = abs(entry_fill - intent.entry_price) * intent.quantity + abs(exit_fill - exit_mid) * intent.quantity
         total_costs = commission + spread_and_slippage
+        last_exit_time = exit_bar.timestamp
         results.append(TradeResult(
             trade_id=intent.trade_id, direction=intent.direction,
             entry_time=entry_bar.timestamp, exit_time=exit_bar.timestamp,
