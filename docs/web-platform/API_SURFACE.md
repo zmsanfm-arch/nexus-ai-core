@@ -91,3 +91,9 @@ These endpoints register research artifacts only. They do not start backtests, a
 | POST | `/knowledge/sources` | admin | implemented; provenance-aware, immutable source ingestion |
 | GET | `/knowledge/search?q=...` | authenticated | implemented; lexical retrieval baseline with source and segment metadata |
 | POST | `/agents/ict-mentor/invoke` | authenticated | implemented; central advisory invocation with schema and provenance checks; execution disabled |
+
+
+| Method | Route | Access | State |
+|---|---|---|---|
+| POST | `/strategies/{strategy_id}/versions/{version}/transitions` | admin | implemented; evidence-gated lifecycle transition with audit |
+| GET | `/strategies/{strategy_id}/versions/{version}/transitions` | authenticated | implemented; current state derived from immutable transition history |
