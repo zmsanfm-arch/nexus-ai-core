@@ -1,96 +1,39 @@
-# NEXUS Integration Contract — ICT Mentor
+# NEXUS Integration Contract — ICT Mentor (Advisory Release)
 
-## Current core compatibility
+## Ownership boundary
+ICT Mentor is a specialist invoked only by the NEXUS central orchestrator. It must not implement an orchestrator, task manager, scheduler, permission service, risk engine, audit service, MT5 connector, broker adapter, or execution gateway. NEXUS owns authentication, authorization, routing, approvals, audit, market-data access, risk decisions, and any future execution.
 
-The current NEXUS codebase has FastAPI endpoints, an agent registry, a single OpenAI-compatible model adapter, a basic orchestrator, and SQLAlchemy persistence for tasks, approvals, and audit events.
+## Active task types
+- ict.education
+- ict.source_lookup
+- ict.chart_analysis
+- ict.strategy_formalization
+- ict.trade_review
 
-The current runtime does **not** yet provide a pluggable specialist-agent interface, agent-specific routing, retrieval service, vector store, or broker execution gateway. This specification does not claim ICT Mentor is already executable.
+## Defined but disabled task types
+- ict.position_monitoring
+- ict.position_management
+- ict.autonomous_execution
 
-## Required runtime extension
+The disabled task types must be rejected before specialist invocation in this release.
 
-Add a formal agent interface with:
-- `agent_id`, `version`, `capabilities`, `permissions`
-- `system_prompt`, `input_schema`, `output_schema`
-- `run(context) -> AgentResult`
+## Mode
+Only advisory mode is supported. Any other mode is rejected. The specialist cannot change its mode or permissions. A chart-analysis or trade-review request is not authorization to trade.
 
-The registry loads manifests and validates permissions. The orchestrator routes by explicit task type/capability.
+## Permissions
+Specialist permission requests are limited to knowledge.retrieve, user_input.read, and chart_attachment.read. NEXUS grants permissions per invocation. ICT Mentor receives no market/account/position access, position modification, order submission/cancellation, broker credentials, MT5 connectivity, risk-policy modification, or governance-bypass permission.
 
-## Operating modes and authorization
+## Input and output
+The canonical JSON Schemas are in schemas/input.schema.json and schemas/output.schema.json. The output requires agent_id, mode, answer, source_claims, user_rules_used, agent_inferences, proposed_actions, risk_decision, execution_result, and uncertainties. execution_result is always null in this release. source_claims require source title, valid URL, retrieval time, and segment/timestamp provenance. User rules must be explicitly confirmed by the user. Inferences must remain separate.
 
-1. **Advisory (default):** research, retrieval, analysis, and proposals only.
-2. **Position management:** read/modify/close only positions explicitly covered by an approved policy.
-3. **Autonomous execution:** submit/manage orders only within a user-approved, versioned strategy and hard limits.
+## Evidence policy
+ICT doctrine claims require retrieved source evidence. Each claim must identify title, canonical URL, retrieval timestamp, and segment/timestamp. If evidence is absent, mark the claim unverified; do not fabricate citations or attribution. Personal rules are recorded only after explicit user statement or confirmation. Do not invent entry, exit, session, invalidation, or risk rules.
 
-Mode changes must be explicit, authenticated, auditable, and performed outside the model. A model prompt or model-generated response cannot activate permissions.
+## Fail-closed policy
+Missing chart evidence, incomplete trade data, missing source provenance, ambiguous context, or unconfirmed rules must be surfaced as uncertainty. The specialist must not fabricate prices, candle structure, fills, broker state, or source timestamps. Trading/account mutation requests are out of scope and must be referred to central governance.
 
-## Execution architecture
+## Validation
+Run the schema tests with jsonschema>=4.21:
+python -m unittest discover -s agents/ict_mentor/tests -v
 
-ICT Mentor must never hold broker credentials or call MT5/broker APIs directly. It submits a typed action request to a separate NEXUS Execution Gateway.
-
-The gateway must:
-- Authenticate the requesting agent and verify its current permissions.
-- Validate the action against the active user-approved policy.
-- Fetch current account, market, and position state independently.
-- Run deterministic risk checks immediately before execution.
-- Enforce instrument/account scope, max risk per trade, max aggregate exposure, max position count, daily loss, drawdown, spread, slippage, trading hours, and kill-switch state.
-- Reject stale data, duplicate requests, invalid stops/targets, and inconsistent broker state.
-- Use idempotency keys and reconcile broker acknowledgements and final position state.
-- Persist a complete audit record for each proposed, approved, rejected, and executed action.
-
-## Initial rollout
-
-- Keep execution disabled by default.
-- Build and test on Demo only.
-- Begin with read-only position monitoring, then explicitly authorized position management, then bounded autonomous execution.
-- Do not enable a live account without a separate user decision, security review, and evidence from Demo forward-testing.
-- The risk engine must remain able to block any action, regardless of the agent's recommendation or mode.
-
-## Proposed task routing
-
-- `ict.education`
-- `ict.source_lookup`
-- `ict.chart_analysis`
-- `ict.strategy_formalization`
-- `ict.trade_review`
-- `ict.position_monitoring`
-- `ict.position_management`
-- `ict.autonomous_execution`
-
-## Retrieval boundary
-
-Use a provider-neutral interface:
-
-```python
-retrieve(query: str, filters: dict, top_k: int = 6) -> list[KnowledgeChunk]
-```
-
-Every chunk includes source metadata and timestamps. The agent may not fabricate citations.
-
-## Proposed output schema
-
-```json
-{
-  "agent_id": "ict_mentor",
-  "mode": "advisory",
-  "answer": "string",
-  "source_claims": [],
-  "user_rules_used": [],
-  "agent_inferences": [],
-  "proposed_actions": [],
-  "risk_decision": "not_requested",
-  "execution_result": null,
-  "uncertainties": []
-}
-```
-
-## Acceptance tests
-
-1. Registry loads the manifest and routes ICT task types correctly.
-2. Default mode cannot invoke execution tools.
-3. Mode changes require authenticated, auditable user authorization.
-4. Agent cannot expand its own permissions.
-5. Every proposed action is independently checked by the risk engine.
-6. Stale data, duplicate requests, risk breaches, and kill-switch activation fail closed.
-7. Broker results are reconciled and audited; no success is claimed without acknowledgement.
-8. Source claims have valid links/timestamps; unsupported attribution is marked unverified.
-9. User strategy rules remain separate from ICT source doctrine.
+NEXUS must validate input/output and reject unknown or disabled task types before invoking the specialist. Schema-valid proposals are not authorization.
