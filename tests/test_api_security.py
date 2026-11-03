@@ -224,7 +224,7 @@ def test_security_middleware_sets_request_id_and_rejects_oversized_body(client):
         "/tasks",
         headers={
             "Authorization": "Bearer test-api-token",
-            "Content-Length": "2000000",
+            "Content-Length": "7000000",
         },
         json={"objective": "analyze market structure"},
     )
