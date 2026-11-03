@@ -2,98 +2,95 @@
 
 ## Current core compatibility
 
-The current NEXUS codebase has:
-- FastAPI endpoints for health, agent listing, task submission, task retrieval, and approval decisions.
-- An in-memory agent registry with the ids `research`, `analysis`, `developer`, `executor`, and `auditor`.
-- A single OpenAI-compatible model adapter.
-- A basic orchestrator that sends one generic system prompt to one model.
-- SQLAlchemy persistence for tasks, approvals, and audit events.
+The current NEXUS codebase has FastAPI endpoints, an agent registry, a single OpenAI-compatible model adapter, a basic orchestrator, and SQLAlchemy persistence for tasks, approvals, and audit events.
 
-The current runtime does **not** yet provide a pluggable specialist-agent interface, agent-specific routing, retrieval service, vector store, or multi-agent workflow execution. Therefore this specification intentionally does not pretend that ICT Mentor is already executable.
+The current runtime does **not** yet provide a pluggable specialist-agent interface, agent-specific routing, retrieval service, vector store, or broker execution gateway. This specification does not claim ICT Mentor is already executable.
 
 ## Required runtime extension
 
-When the core runtime is ready, add a formal agent interface with at least:
-
-- `agent_id`
-- `version`
-- `capabilities`
-- `permissions`
-- `system_prompt`
-- `input_schema`
-- `output_schema`
+Add a formal agent interface with:
+- `agent_id`, `version`, `capabilities`, `permissions`
+- `system_prompt`, `input_schema`, `output_schema`
 - `run(context) -> AgentResult`
 
-The registry should load agent manifests and validate permissions. The orchestrator should route a task to a specialist based on explicit task type/capability, not keyword-only heuristics.
+The registry loads manifests and validates permissions. The orchestrator routes by explicit task type/capability.
+
+## Operating modes and authorization
+
+1. **Advisory (default):** research, retrieval, analysis, and proposals only.
+2. **Position management:** read/modify/close only positions explicitly covered by an approved policy.
+3. **Autonomous execution:** submit/manage orders only within a user-approved, versioned strategy and hard limits.
+
+Mode changes must be explicit, authenticated, auditable, and performed outside the model. A model prompt or model-generated response cannot activate permissions.
+
+## Execution architecture
+
+ICT Mentor must never hold broker credentials or call MT5/broker APIs directly. It submits a typed action request to a separate NEXUS Execution Gateway.
+
+The gateway must:
+- Authenticate the requesting agent and verify its current permissions.
+- Validate the action against the active user-approved policy.
+- Fetch current account, market, and position state independently.
+- Run deterministic risk checks immediately before execution.
+- Enforce instrument/account scope, max risk per trade, max aggregate exposure, max position count, daily loss, drawdown, spread, slippage, trading hours, and kill-switch state.
+- Reject stale data, duplicate requests, invalid stops/targets, and inconsistent broker state.
+- Use idempotency keys and reconcile broker acknowledgements and final position state.
+- Persist a complete audit record for each proposed, approved, rejected, and executed action.
+
+## Initial rollout
+
+- Keep execution disabled by default.
+- Build and test on Demo only.
+- Begin with read-only position monitoring, then explicitly authorized position management, then bounded autonomous execution.
+- Do not enable a live account without a separate user decision, security review, and evidence from Demo forward-testing.
+- The risk engine must remain able to block any action, regardless of the agent's recommendation or mode.
 
 ## Proposed task routing
 
-Suggested task types:
 - `ict.education`
 - `ict.source_lookup`
 - `ict.chart_analysis`
 - `ict.strategy_formalization`
 - `ict.trade_review`
-
-Suggested assignment:
-- `ict_mentor` handles education, source lookup, chart interpretation, and strategy review.
-- A separate market-data/chart agent may provide normalized OHLCV and session data later.
-- The Forex execution agent, if added later, remains separate and must not inherit broker permissions from ICT Mentor.
+- `ict.position_monitoring`
+- `ict.position_management`
+- `ict.autonomous_execution`
 
 ## Retrieval boundary
 
-The ICT Mentor should call a retrieval interface such as:
+Use a provider-neutral interface:
 
 ```python
-retrieve(
-    query: str,
-    filters: dict,
-    top_k: int = 6,
-) -> list[KnowledgeChunk]
+retrieve(query: str, filters: dict, top_k: int = 6) -> list[KnowledgeChunk]
 ```
 
-Each `KnowledgeChunk` must include source metadata and timestamps. The agent may not fabricate a citation when retrieval returns no supporting chunk.
+Every chunk includes source metadata and timestamps. The agent may not fabricate citations.
 
-The storage backend is intentionally undecided. Keep the interface provider-neutral so the core can choose PostgreSQL + pgvector or another supported retrieval store later.
-
-## Output schema (proposed)
+## Proposed output schema
 
 ```json
 {
   "agent_id": "ict_mentor",
+  "mode": "advisory",
   "answer": "string",
-  "source_claims": [
-    {
-      "claim": "string",
-      "source_id": "string",
-      "title": "string",
-      "url": "string",
-      "timestamp_start": "string",
-      "timestamp_end": "string"
-    }
-  ],
-  "user_rules_used": ["string"],
-  "agent_inferences": ["string"],
-  "uncertainties": ["string"],
-  "risk_note": "advisory_only"
+  "source_claims": [],
+  "user_rules_used": [],
+  "agent_inferences": [],
+  "proposed_actions": [],
+  "risk_decision": "not_requested",
+  "execution_result": null,
+  "uncertainties": []
 }
 ```
 
-## Security and governance
+## Acceptance tests
 
-- Register only read/research/analysis permissions.
-- No broker credentials or trading execution tools are exposed to this agent.
-- Agent output is untrusted data and never authorizes an action.
-- All consequential actions remain subject to the independent NEXUS governance and risk controls.
-- Keep provider keys and database credentials in server-side environment variables/secrets, never in manifests or prompts.
-
-## Acceptance tests before runtime registration
-
-1. Registry loads the manifest and reports `ict_mentor` as available.
-2. Task router sends `ict.education` to ICT Mentor.
-3. Retrieved source claims include valid URLs and timestamps.
-4. Unsupported attribution is explicitly marked unverified.
-5. User-defined strategy rules remain separate from ICT source doctrine.
-6. The agent cannot invoke broker or execution capabilities.
-7. Missing model configuration or retrieval service fails closed with an explicit blocked status.
-8. All task and retrieval operations are auditable.
+1. Registry loads the manifest and routes ICT task types correctly.
+2. Default mode cannot invoke execution tools.
+3. Mode changes require authenticated, auditable user authorization.
+4. Agent cannot expand its own permissions.
+5. Every proposed action is independently checked by the risk engine.
+6. Stale data, duplicate requests, risk breaches, and kill-switch activation fail closed.
+7. Broker results are reconciled and audited; no success is claimed without acknowledgement.
+8. Source claims have valid links/timestamps; unsupported attribution is marked unverified.
+9. User strategy rules remain separate from ICT source doctrine.
