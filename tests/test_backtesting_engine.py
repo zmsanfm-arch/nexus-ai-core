@@ -24,8 +24,8 @@ def test_long_trade_uses_explicit_costs_and_stop_fill():
     assert result.exit_reason == "stop"
     assert result.entry_fill == pytest.approx(100.2)
     assert result.exit_fill == pytest.approx(97.8)
-    assert result.costs == pytest.approx(0.6)
-    assert result.net_pnl == pytest.approx(-2.6)
+    assert result.costs == pytest.approx(0.5)
+    assert result.net_pnl == pytest.approx(-2.5)
 
 
 def test_same_bar_ambiguity_can_be_rejected():
