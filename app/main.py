@@ -1,5 +1,7 @@
 import os
 import json
+from datetime import datetime
+from urllib.parse import urlparse
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -8,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate
+from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate, KnowledgeSourceCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
@@ -169,3 +171,54 @@ def get_experiment(experiment_id: str):
     if record is None or record.get("record_type") != "experiment":
         raise HTTPException(status_code=404, detail="Experiment not found")
     return {"experiment_id": experiment_id, "data": {k: v for k, v in record.items() if k != "record_type"}}
+
+
+@app.post("/knowledge/sources")
+def create_knowledge_source(
+    payload: KnowledgeSourceCreate,
+    reviewer_id: str = Depends(require_admin),
+):
+    parsed_url = urlparse(payload.url)
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
+        raise HTTPException(status_code=422, detail="Knowledge source URL must be HTTPS")
+    try:
+        retrieved_at = datetime.fromisoformat(payload.retrieved_at.replace("Z", "+00:00"))
+        if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
+            raise ValueError("retrieved_at must include a timezone")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    chunks = [chunk.model_dump() for chunk in payload.chunks]
+    ordinals = [chunk["ordinal"] for chunk in chunks]
+    if len(ordinals) != len(set(ordinals)):
+        raise HTTPException(status_code=422, detail="Chunk ordinals must be unique")
+    try:
+        store.save_knowledge_source(
+            {
+                "id": payload.id,
+                "title": payload.title,
+                "url": payload.url,
+                "source_type": payload.source_type,
+                "usage_basis": payload.usage_basis,
+                "retrieved_at": retrieved_at,
+                "metadata": payload.metadata,
+            },
+            chunks,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    store.append_audit({
+        "event": "knowledge_source_ingested",
+        "source_id": payload.id,
+        "actor": reviewer_id,
+        "usage_basis": payload.usage_basis,
+        "chunk_count": len(chunks),
+    })
+    return {"source_id": payload.id, "status": "indexed", "chunk_count": len(chunks)}
+
+
+@app.get("/knowledge/search", dependencies=[Depends(authenticate)])
+def search_knowledge(q: str, limit: int = 10):
+    if not q.strip() or len(q) > 500:
+        raise HTTPException(status_code=422, detail="Query must contain 1 to 500 characters")
+    results = store.search_knowledge(q, limit)
+    return {"query": q, "results": results, "retrieval_mode": "lexical_baseline"}
