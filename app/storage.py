@@ -152,6 +152,8 @@ class SQLAlchemyStore:
             else:
                 if record.record_type != record_type:
                     raise ValueError("Research record type cannot change")
+                if record_type == "experiment":
+                    raise ValueError("Experiment plans are immutable; create a new experiment version")
                 record.data = dict(data)
 
     def get_research_record(self, record_id: str):
