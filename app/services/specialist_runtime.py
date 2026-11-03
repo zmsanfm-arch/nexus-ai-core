@@ -43,6 +43,8 @@ class SpecialistRuntime:
                 raise SpecialistContractError("Specialist returned an invalid result type.")
             if result.agent_id != agent_id:
                 raise SpecialistContractError("Specialist identity mismatch.")
+            if result.mode != "advisory":
+                raise SpecialistContractError("Only advisory specialist mode is allowed.")
             if result.execution_result is not None:
                 raise SpecialistContractError("Specialists cannot return execution results.")
         except Exception as exc:
