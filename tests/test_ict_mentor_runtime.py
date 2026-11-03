@@ -69,3 +69,15 @@ def test_runtime_uses_only_confirmed_user_rules():
     })
     assert result["user_rules_used"] == []
     assert "not explicitly confirmed" in result["uncertainties"][0]
+
+
+def test_runtime_rejects_spoofed_source_metadata():
+    output = base_output()
+    output["source_claims"][0]["url"] = "https://attacker.example/fake"
+    runtime = ICTMentorRuntime(FakeModel(output), FakeStorage())
+    result = runtime.invoke({
+        "task_type": "ict.education", "mode": "advisory",
+        "request": "Explain liquidity concepts",
+    })
+    assert result["source_claims"] == []
+    assert "altered retrieved provenance" in result["uncertainties"][0]
