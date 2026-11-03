@@ -21,6 +21,18 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 
 
+def require_api_access(authorization: str | None = Header(default=None)) -> str:
+    expected_token = os.getenv("NEXUS_API_TOKEN")
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="API access is not configured")
+    scheme, _, supplied_token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied_token:
+        raise HTTPException(status_code=401, detail="Bearer authentication required")
+    if not hmac.compare_digest(supplied_token, expected_token):
+        raise HTTPException(status_code=403, detail="Invalid API credentials")
+    return "api-client"
+
+
 def require_admin(authorization: str | None = Header(default=None)) -> str:
     expected_token = os.getenv("NEXUS_ADMIN_TOKEN")
     reviewer_id = os.getenv("NEXUS_ADMIN_ID")
@@ -45,21 +57,34 @@ def health():
 
 
 @app.get("/agents")
-def list_agents():
+def list_agents(_: str = Depends(require_api_access)):
     return {"agents": registry.list_agents()}
 
 
 @app.post("/tasks", response_model=TaskView)
-def create_task(payload: TaskCreate):
+def create_task(
+    payload: TaskCreate,
+    _: str = Depends(require_api_access),
+):
     return orchestrator.submit(payload.objective, payload.task_type, payload.context)
 
 
 @app.get("/tasks/{task_id}", response_model=TaskView)
-def get_task(task_id: str):
+def get_task(task_id: str, _: str = Depends(require_api_access)):
     task = store.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+@app.get("/audit")
+def list_audit(
+    limit: int = 100,
+    reviewer_id: str = Depends(require_admin),
+):
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
+    return {"events": store.list_audit(limit=limit)}
 
 
 @app.post("/approvals/{approval_id}/decision")
