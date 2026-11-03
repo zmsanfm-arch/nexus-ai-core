@@ -72,3 +72,13 @@ def test_favorable_gap_through_target_uses_open_price():
     result = run_backtest(bars, [intent])[0]
     assert result.exit_reason == "target"
     assert result.exit_fill == 105
+
+
+def test_entry_bar_extremes_are_not_used_for_exit():
+    bars = [
+        Candle(ts(1), 100, 104, 97, 100),
+        Candle(ts(2), 100, 101, 99, 100),
+    ]
+    intent = TradeIntent("t8", "long", ts(0), ts(1), 100, 98, 103)
+    with pytest.raises(ValueError, match="remains open"):
+        run_backtest(bars, [intent])
