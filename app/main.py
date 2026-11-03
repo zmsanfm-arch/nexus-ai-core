@@ -1,5 +1,6 @@
 import hmac
 import os
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
@@ -122,7 +123,7 @@ def create_knowledge_source(
     payload: KnowledgeSourceCreate,
     reviewer_id: str = Depends(require_admin),
 ):
-    parsed = __import__("urllib.parse", fromlist=["urlparse"]).urlparse(payload.url)
+    parsed = urlparse(payload.url)
     if parsed.scheme != "https" or not parsed.netloc:
         raise HTTPException(status_code=422, detail="Knowledge source URL must be HTTPS")
     try:
