@@ -41,7 +41,7 @@ class SpecialistInput(StrictModel):
     retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
     correlation_id: str | None = Field(default=None, max_length=128)
 
-    @field_validator("context", "chart", "trade", "user_rules", "retrieved_sources")
+    @field_validator("context", "chart", "trade", "user_rules", "retrieved_sources", mode="before")
     @classmethod
     def payloads_must_be_bounded_json(cls, value):
         if value is None:
