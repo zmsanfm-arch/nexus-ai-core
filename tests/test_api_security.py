@@ -211,3 +211,19 @@ def test_ict_mentor_invocation_rejects_unsupported_capabilities(client):
         json={"task_type": "ict.autonomous_execution", "request": "Open a trade"},
     )
     assert response.status_code == 422
+
+
+def test_security_middleware_sets_request_id_and_rejects_oversized_body(client):
+    healthy = client.get("/health")
+    assert healthy.status_code == 200
+    assert healthy.headers.get("x-request-id")
+
+    oversized = client.post(
+        "/tasks",
+        headers={
+            "Authorization": "Bearer test-api-token",
+            "Content-Length": "2000000",
+        },
+        json={"objective": "analyze market structure"},
+    )
+    assert oversized.status_code == 413
