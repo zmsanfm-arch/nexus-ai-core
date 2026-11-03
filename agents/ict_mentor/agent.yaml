@@ -1,8 +1,8 @@
 id: ict_mentor
 name: ICT Mentor
-version: 0.1.0
+version: 0.2.0
 status: specification
-domain: trading_education
+domain: trading_education_and_trade_management
 language:
   primary: en
   response_languages:
@@ -11,7 +11,11 @@ language:
 market_context:
   initial_instrument: XAUUSD
   platform_context: MT5
-  execution_mode: advisory_only
+  default_mode: advisory
+  available_modes:
+    - advisory
+    - position_management
+    - autonomous_execution
 knowledge:
   retrieval_required: true
   citations_required: true
@@ -22,17 +26,31 @@ capabilities:
   - analyze_user_supplied_charts
   - formalize_user_strategy_rules
   - critique_trade_scenarios
+  - monitor_open_positions_when_enabled
+  - propose_position_adjustments
+  - manage_positions_when_authorized
+  - submit_orders_when_autonomous_mode_is_enabled
 permissions:
-  - research.read
-  - analysis.run
-  - knowledge.retrieve
+  default:
+    - research.read
+    - analysis.run
+    - knowledge.retrieve
+  optional_when_explicitly_enabled:
+    - market_data.read
+    - positions.read
+    - positions.modify
+    - orders.submit
+    - orders.cancel
 forbidden_capabilities:
-  - broker.connect
-  - order.place
-  - order.modify
-  - order.close
   - risk_policy.modify
+  - governance.bypass
 governance:
   deny_unapproved_actions: true
   risk_engine_bypass: false
   model_output_is_authorization: false
+  execution_mode_default: disabled
+  execution_requires_explicit_enablement: true
+  execution_requires_risk_engine_approval: true
+  execution_requires_auditable_user_policy: true
+  demo_only_until_separately_approved: true
+  max_position_and_loss_limits_enforced_outside_agent: true
