@@ -13,6 +13,20 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: nexus_ci
+          POSTGRES_USER: nexus_ci
+          POSTGRES_PASSWORD: nexus_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus_ci -d nexus_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,9 +42,13 @@ jobs:
           pip install pytest "jsonschema>=4.21,<5"
       - name: Run tests
         run: pytest -q
-      - name: Verify database migrations
+      - name: Verify SQLite migrations
         env:
           DATABASE_URL: sqlite:///./data/ci-migrations.db
+        run: alembic upgrade head
+      - name: Verify PostgreSQL migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://nexus_ci:nexus_ci_password@localhost:5432/nexus_ci
         run: alembic upgrade head
 
       - name: Build container image
