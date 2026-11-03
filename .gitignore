@@ -1,6 +1,10 @@
 .venv/
-__pycach__/
-*\.py[co]
+__pycache__/
+*.py[cod]
 .pytest_cache/
+.coverage
+htmlcov/
 .sequence/store/
 .env
+.env.*
+!.env.example
