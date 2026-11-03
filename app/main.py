@@ -1,19 +1,51 @@
-import hmac
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.schemas import TaskCreate, TaskView, ApprovalDecision
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
+from app.security import authenticate, require_admin
 from app.storage import store
+
 
 app = FastAPI(
     title="NEXUS AI CORE",
     version="0.2.0",
-    description="Autonomous multi-agent system foundation",
+    description="Central NEXUS orchestration and governance API",
 )
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("NEXUS_CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 registry = AgentRegistry()
 governance = GovernanceService(store)
@@ -21,45 +53,28 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 
 
-def require_admin(authorization: str | None = Header(default=None)) -> str:
-    expected_token = os.getenv("NEXUS_ADMIN_TOKEN")
-    reviewer_id = os.getenv("NEXUS_ADMIN_ID")
-    if not expected_token or not reviewer_id:
-        raise HTTPException(status_code=503, detail="Approval administration is not configured")
-    scheme, _, supplied_token = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not supplied_token:
-        raise HTTPException(status_code=401, detail="Bearer authentication required")
-    if not hmac.compare_digest(supplied_token, expected_token):
-        raise HTTPException(status_code=403, detail="Invalid administrator credentials")
-    return reviewer_id
-
-
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "service": "nexus-ai-core",
-        "version": "0.2.0",
-        "model_configured": model_router.select("health") is not None,
-    }
+    # Public liveness only; do not disclose model/provider configuration.
+    return {"status": "ok", "service": "nexus-ai-core"}
 
 
-@app.get("/agents")
+@app.get("/agents", dependencies=[Depends(authenticate)])
 def list_agents():
     return {"agents": registry.list_agents()}
 
 
-@app.post("/tasks", response_model=TaskView)
+@app.post("/tasks", response_model=TaskView, dependencies=[Depends(authenticate)])
 def create_task(payload: TaskCreate):
     return orchestrator.submit(payload.objective)
 
 
-@app.get("/tasks/{task_id}", response_model=TaskView)
+@app.get("/tasks/{task_id}", response_model=TaskView, dependencies=[Depends(authenticate)])
 def get_task(task_id: str):
     task = store.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    if not task is None:
+        return task
+    raise HTTPException(status_code=404, detail="Task not found")
 
 
 @app.post("/approvals/{approval_id}/decision")
