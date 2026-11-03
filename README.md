@@ -69,3 +69,4 @@ pytest -q
 - [Web platform delivery roadmap](docs/web-platform/DELIVERY_ROADMAP.md)
 
 These documents describe target architecture and proposed contracts. They do not imply that the corresponding web client, backtesting engine, market-data pipeline, Demo connector, or execution services are already deployed.
+- [Web platform production-readiness gaps](docs/web-platform/IMPLEMENTATION_GAPS.md)
