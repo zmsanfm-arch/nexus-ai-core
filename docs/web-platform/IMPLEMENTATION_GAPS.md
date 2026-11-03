@@ -72,3 +72,24 @@ Remaining persistence work: replace generic JSON payload records with fully norm
 
 - Migration `0004_audit_append_only` installs database triggers that reject UPDATE and DELETE on `audit_events` for SQLite and PostgreSQL.
 - Audit history remains append-only through the database migration path. Production database credentials should still use a least-privilege application role and a separate migration role; trigger enforcement does not replace database access controls.
+
+
+## Research runtime and ICT Mentor implementation update
+
+- The central API now exposes immutable strategy-version registration/retrieval, experiment-plan registration/retrieval, and evidence-gated lifecycle history.
+- Demo promotion (`oos_validated → demo_approved → demo_active`) is hard-disabled in code until a real central Risk Engine, approval verification, MT5 Demo connector, reconciliation, monitoring and kill switch are implemented and independently verified. Client-supplied booleans cannot enable it.
+- ICT Mentor now has a NEXUS-hosted advisory runtime, schema validation, central model-router invocation, provenance checks against retrieved source IDs/segment IDs and metadata, and explicit user-rule validation. The central registry continues to report `specification` until production readiness gates pass.
+- The knowledge store has immutable source IDs and segment metadata. Retrieval is currently lexical and loads the stored chunk set for ranking; this is a baseline, not scalable vector RAG.
+- Backtesting currently supports explicit trade intents on midpoint OHLC bars, spread/slippage/commission, gap-through-stop/target handling, same-bar policy and a single open position. Entry-bar extremes are excluded to prevent look-ahead. Unclosed trades and overlapping intents fail closed.
+- The evaluator reports ledger metrics and an acceptance decision. Missing expectancy-R or robustness evidence blocks acceptance; the current engine does not yet calculate expectancy-R because risk-per-trade/contract sizing semantics are not fully specified.
+- Market data ingestion currently accepts strict timezone-aware OHLC CSVs. There is no live vendor feed, MT5 historical-data bridge, bid/ask tick archive, swap/financing model or broker-specific symbol specification.
+
+## Remaining hard blockers before a usable hosted console or Demo
+
+- Production identity provider/OIDC issuer, audience, group/role mapping and MFA policy are not configured. Static bearer tokens are a bootstrap baseline only.
+- PostgreSQL service, credentials, backup/restore, migration execution and least-privilege DB roles have not been provisioned.
+- A licensed/authorized ICT corpus has not been ingested; no transcript scraping or copyrighted bulk rehosting is permitted by this implementation.
+- Historical XAUUSD datasets with verified broker/timezone/specification and bid/ask costs have not been supplied or connected.
+- Full portfolio-level backtesting, walk-forward orchestration, out-of-sample evidence and production evaluator persistence are incomplete.
+- MT5 Demo bridge, broker account reconciliation, central Risk Engine, Execution Gateway and operational kill switch do not exist yet. Live remains disabled.
+- A Next.js mobile console and hosting/deployment have not been built. They must follow production identity and API hardening; no public endpoint should be exposed meanwhile.
