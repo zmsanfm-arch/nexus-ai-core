@@ -58,3 +58,11 @@ ICT Mentor may submit a strategy specification or request a backtest through the
 ## Current scope and non-goals
 
 This release is specification-only. It does not implement a data feed, simulator, optimizer, evaluator, MT5 connector, Demo execution or live trading. No strategy is approved by virtue of these schemas. XAUUSD is a proposed initial research instrument, not a hard-coded limitation of the contract.
+
+
+## Implemented research runtime foundation
+
+- `app/market_data/csv_loader.py`: strict timezone-aware OHLC CSV ingestion, OHLC validation, chronological normalization, duplicate rejection and optional expected-interval gap counts.
+- `app/backtesting/engine.py`: deterministic one-intent-at-a-time OHLC simulator with explicit spread, slippage, commission, gap-through-stop handling and configurable same-bar stop/target policy.
+- `app/backtesting/evaluator.py`: ledger-derived win rate, profit factor, net PnL, average trade PnL, equity curve and max drawdown.
+- These modules do not generate ICT signals, select entries or represent a broker feed. A strategy-specific signal adapter, bid/ask historical datasets, swap/financing, partial fills, portfolio concurrency and full walk-forward orchestration remain future work. The current simulator must not be treated as a complete production-grade backtester.
