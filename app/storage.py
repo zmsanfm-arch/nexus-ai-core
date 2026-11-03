@@ -163,7 +163,7 @@ class SQLAlchemyStore:
             return dict(record.data) if record else None
 
     def save_research_record(self, record_type: str, record_id: str, data: dict):
-        if record_type not in {"experiment", "backtest_run", "backtest_trade", "evaluator_result"}:
+        if record_type not in {"experiment", "backtest_run", "backtest_trade", "evaluator_result", "strategy_transition"}:
             raise ValueError("Unsupported research record type")
         with self._lock, self.sessions.begin() as session:
             record = session.get(ResearchRecord, record_id)
@@ -178,6 +178,14 @@ class SQLAlchemyStore:
                 if record_type == "experiment":
                     raise ValueError("Experiment plans are immutable; create a new experiment version")
                 record.data = dict(data)
+
+    def list_strategy_transitions(self, strategy_id: str):
+        with self.sessions() as session:
+            records = session.scalars(
+                select(ResearchRecord).where(ResearchRecord.record_type == "strategy_transition")
+                .order_by(ResearchRecord.created_at.asc())
+            ).all()
+            return [dict(record.data) for record in records if record.data.get("strategy_id") == strategy_id]
 
     def get_research_record(self, record_id: str):
         with self.sessions() as session:
