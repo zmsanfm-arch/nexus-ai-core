@@ -75,7 +75,7 @@ def create_task(
 
 
 @app.get("/tasks/{task_id}", response_model=TaskView)
-def get_task(task_id: str, _: str = Depends(require_api_access)):
+def get_task(task_id: str, principal_id: str = Depends(require_api_access)):
     task = store.get_task(task_id)
     if not task or task.get("principal_id", "api-client") != principal_id:
         raise HTTPException(status_code=404, detail="Task not found")
