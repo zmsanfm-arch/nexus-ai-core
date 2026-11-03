@@ -1,74 +1,56 @@
 # Handoff: ICT Mentor → NEXUS AI CORE
 
 ## Purpose
-This document is the integration handoff between the Forex/ICT Mentor workstream and the NEXUS central multi-agent workstream. ICT Mentor is a specialist agent hosted and governed by NEXUS; it is not a second independent orchestration system.
+ICT Mentor is a domain specialist in the Forex workstream and is hosted/governed by NEXUS. It is not an independent agent platform and must not create a parallel orchestrator or execution system.
 
-## Source of truth
-- Repository: https://github.com/zmsanfm-arch/nexus-ai-core
-- ICT implementation branch: `feature/ict-mentor-agent-foundation`
-- Current PR: https://github.com/zmsanfm-arch/nexus-ai-core/pull/1
-- ICT specification files: `agents/ict_mentor/`
-- Do not merge this specification branch until it has been reconciled with the latest `main`. The branch has diverged from `main` and is behind by one commit as of this handoff.
+## Ownership
 
-## Responsibilities by workstream
+### Forex / ICT Mentor owns
+- ICT education and source-grounded explanations.
+- Source lookup and provenance requirements.
+- User-supplied chart analysis and trade review.
+- Formalization of personal strategy rules only after explicit user confirmation.
+- Specialist prompt, schemas, examples, and evaluation tests.
 
-### Forex / ICT Mentor workstream
-Owns:
-- ICT teaching and source-grounded explanations.
-- Chart analysis and trade review.
-- Formalization of the user's ICT-standard strategy and limited customizations.
-- Knowledge source metadata, retrieval requirements, citations, and evaluation cases.
-- Specialist agent behavior and output contract.
-
-### NEXUS central workstream
-Owns:
-- Agent runtime/interface and manifest loading.
-- Agent registry and task routing.
-- Authentication, permissions, approvals, governance, audit trail.
-- Shared market-data access and broker connectivity.
+### NEXUS central core owns
+- Runtime/interface, manifest loading, registry, and task routing.
+- Authentication, authorization, approvals, governance, and audit.
+- Shared market data and any account/position access.
 - Independent deterministic risk engine and execution gateway.
-- Deployment, secrets, monitoring, and service lifecycle.
+- Broker connectivity, MT5, secrets, deployment, and service lifecycle.
 
-## Required integration sequence
-1. Reconcile this branch against the latest `main`; preserve all central-core changes and resolve contract differences before implementation.
-2. Confirm or implement a stable specialist interface: `agent_id`, `version`, `capabilities`, `permissions`, input/output schemas, and `run(context) -> AgentResult`.
-3. Register `ict_mentor` through the central registry/manifest loader; do not create a parallel orchestrator.
-4. Route these task types to the specialist:
-   - `ict.education`
-   - `ict.source_lookup`
-   - `ict.chart_analysis`
-   - `ict.strategy_formalization`
-   - `ict.trade_review`
-   - `ict.position_monitoring`
-   - `ict.position_management`
-   - `ict.autonomous_execution`
-5. Connect a provider-neutral retrieval interface and source provenance. Each retrieved chunk must retain source title, canonical URL, timestamp/segment, and source type.
-6. Keep the agent in `advisory` mode by default. Position management and autonomous execution remain disabled unless separately authorized.
-7. All broker actions must pass through the central execution gateway and independent risk engine. The model must never hold broker credentials or call MT5 directly.
-8. Add integration tests for routing, authorization, fail-closed behavior, source citations, and audit logging.
-9. Start with XAUUSD on MT5 Demo. Do not enable live execution as part of the initial integration.
+## Current specialist contract
 
-## Specialist output contract (minimum)
-Return a structured result containing:
-- `agent_id`, `mode`, `answer`
-- `source_claims` (claims with source URL and timestamp/segment)
-- `user_rules_used` (only explicitly documented user rules)
-- `agent_inferences` (clearly separated from source doctrine)
-- `proposed_actions`
-- `risk_decision`
-- `execution_result` (null unless an authorized gateway action was actually acknowledged)
-- `uncertainties`
+Enabled tasks: ict.education, ict.source_lookup, ict.chart_analysis, ict.strategy_formalization, ict.trade_review.
 
-## Authorization invariants
-- Model output is never authorization.
-- A chat request to analyze a chart or discuss a position is not permission to trade.
-- The specialist cannot grant or expand its own permissions.
-- Risk limits and kill switch are enforced outside the model and cannot be overridden.
-- Reject stale market data, duplicate actions, invalid broker state, and failed risk checks.
-- Never claim an order succeeded without broker acknowledgement and state reconciliation.
+Defined but disabled: ict.position_monitoring, ict.position_management, ict.autonomous_execution. Central routing must reject these tasks in the current release.
 
-## User decisions still required in the Forex workstream
-The user will provide chart examples and define their actual entry/exit, invalidation, session, liquidity, MSS, FVG, and risk rules. Do not invent these rules or silently substitute generic ICT interpretations. Preserve a clear distinction between official ICT source doctrine and the user's personal playbook.
+Only advisory mode is supported. Specialist permission requests are limited to knowledge.retrieve, user_input.read, and chart_attachment.read. No direct live market, account, position, order, broker credential, or MT5 permissions are granted. execution_result is always null.
 
-## Current implementation status
-The ICT files in this branch are a design specification, not a running agent. Runtime registration, retrieval, routing, execution gateway, and broker integration are not yet complete.
+Canonical schemas:
+- agents/ict_mentor/schemas/input.schema.json
+- agents/ict_mentor/schemas/output.schema.json
+
+Examples and tests:
+- agents/ict_mentor/examples/contract_examples.json
+- agents/ict_mentor/tests/test_contract.py
+
+## Required central integration
+1. Define/confirm the central specialist interface and manifest loader.
+2. Register ict_mentor with only the five enabled task types and advisory mode.
+3. Reject the three disabled task types before invoking the specialist.
+4. Validate input/output against the supplied JSON Schemas; reject invalid outputs.
+5. Grant only the per-invocation read permissions approved by central authorization.
+6. Persist source provenance and audit invocation metadata centrally.
+7. Do not expose risk engine or execution gateway tools to this specialist in the current release.
+
+## Non-negotiable invariants
+- No parallel orchestrator, task manager, or execution gateway.
+- No direct MT5/broker/account connection or credentials in the specialist.
+- Analysis and trade review do not authorize trading.
+- The specialist cannot change its own permissions, mode, or risk limits.
+- Source doctrine, user-confirmed rules, and model inferences remain separate.
+- No source attribution or user rule is fabricated.
+
+## Current status
+Specification and contract files only. This branch has not been merged into main and does not represent a registered/running agent. No broker or live-trading capability exists.
