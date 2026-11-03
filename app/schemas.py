@@ -22,3 +22,11 @@ class TaskView(BaseModel):
 
 class ApprovalDecision(StrictRequest):
     approved: bool
+
+
+class StrategyVersionCreate(StrictRequest):
+    data: dict = Field(min_length=1)
+
+
+class ExperimentCreate(StrictRequest):
+    data: dict = Field(min_length=1)
