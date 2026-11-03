@@ -111,6 +111,9 @@ def run_backtest(
         exit_mid = None
         reason = None
         for bar in eligible:
+            # Entry-bar extremes may have occurred before the entry; never inspect them.
+            if bar.timestamp == entry_bar.timestamp:
+                continue
             if intent.direction == "long":
                 stop_hit = bar.open <= intent.stop_price or bar.low <= intent.stop_price
                 target_hit = bar.open >= intent.target_price or bar.high >= intent.target_price
