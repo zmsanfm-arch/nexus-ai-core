@@ -1,0 +1,148 @@
+"""Central, provenance-preserving knowledge storage adapter for specialists.
+
+Uses the NEXUS SQLAlchemy engine. Retrieval is lexical baseline, not semantic search.
+"""
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+
+from sqlalchemy import (
+    MetaData, Table, Column, String, Integer, DateTime, select, insert,
+)
+
+metadata = MetaData()
+sources = Table(
+    "knowledge_sources", metadata,
+    Column("id", String(128), primary_key=True),
+    Column("title", String(512), nullable=False),
+    Column("url", String(2048), nullable=False),
+    Column("source_type", String(32), nullable=False),
+    Column("usage_basis", String(32), nullable=False),
+    Column("retrieved_at", DateTime(timezone=True), nullable=False),
+)
+chunks = Table(
+    "knowledge_chunks", metadata,
+    Column("id", String(160), primary_key=True),
+    Column("source_id", String(128), nullable=False, index=True),
+    Column("ordinal", Integer, nullable=False),
+    Column("text", String(12000), nullable=False),
+    Column("timestamp_start", String(64), nullable=True),
+    Column("timestamp_end", String(64), nullable=True),
+)
+
+
+class KnowledgeStoreAdapter:
+    """NEXUS-owned knowledge retrieval; no specialist-provided source is trusted."""
+
+    def __init__(self, storage):
+        self.storage = storage
+        self.engine = getattr(storage, "engine", None)
+        self._memory_sources = {}
+        self._memory_chunks = []
+        if self.engine is not None:
+            metadata.create_all(self.engine)
+
+    @staticmethod
+    def _tokens(value: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9_]{2,}", value.casefold()))
+
+    def save_knowledge_source(self, source: dict, source_chunks: list[dict]) -> None:
+        parsed = urlparse(source.get("url", ""))
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("Knowledge source URL must be HTTPS")
+        source_id = source.get("id")
+        if not source_id or len(source_id) > 128:
+            raise ValueError("Invalid knowledge source ID")
+        retrieved_at = source.get("retrieved_at")
+        if isinstance(retrieved_at, str):
+            retrieved_at = datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
+        if not isinstance(retrieved_at, datetime) or retrieved_at.tzinfo is None:
+            raise ValueError("retrieved_at must be timezone-aware")
+        normalized = []
+        seen = set()
+        for item in source_chunks:
+            ordinal = item.get("ordinal")
+            text = item.get("text")
+            if not isinstance(ordinal, int) or ordinal < 0 or ordinal in seen:
+                raise ValueError("Chunk ordinals must be unique non-negative integers")
+            if not isinstance(text, str) or not text.strip() or len(text) > 12000:
+                raise ValueError("Chunk text must contain 1 to 12000 characters")
+            seen.add(ordinal)
+            normalized.append({
+                "id": f"{source_id}:{ordinal}",
+                "source_id": source_id,
+                "ordinal": ordinal,
+                "text": text,
+                "timestamp_start": item.get("timestamp_start"),
+                "timestamp_end": item.get("timestamp_end"),
+            })
+        source_row = {
+            "id": source_id, "title": source["title"], "url": source["url"],
+            "source_type": source.get("source_type", "document"),
+            "usage_basis": source.get("usage_basis", "user_provided"),
+            "retrieved_at": retrieved_at,
+        }
+        if self.engine is None:
+            if source_id in self._memory_sources:
+                raise ValueError("Knowledge source IDs are immutable")
+            self._memory_sources[source_id] = source_row
+            self._memory_chunks.extend(normalized)
+            return
+        with self.engine.begin() as connection:
+            if connection.execute(select(sources.c.id).where(sources.c.id == source_id)).first():
+                raise ValueError("Knowledge source IDs are immutable")
+            connection.execute(insert(sources).values(**source_row))
+            if normalized:
+                connection.execute(insert(chunks), normalized)
+
+    def search_knowledge(self, query: str, limit: int = 8) -> list[dict]:
+        if not isinstance(query, str) or not query.strip() or len(query) > 500:
+            return []
+        if not isinstance(limit, int) or limit < 1 or limit > 20:
+            raise ValueError("Knowledge search limit must be between 1 and 20")
+        if self.engine is None:
+            rows = []
+            for chunk in self._memory_chunks:
+                source = self._memory_sources[chunk["source_id"]]
+                rows.append({**chunk, **source})
+        else:
+            statement = (
+                select(
+                    chunks.c.id.label("segment_id"), chunks.c.source_id,
+                    chunks.c.ordinal, chunks.c.text, chunks.c.timestamp_start,
+                    chunks.c.timestamp_end, sources.c.title, sources.c.url,
+                    sources.c.source_type, sources.c.usage_basis, sources.c.retrieved_at,
+                )
+                .select_from(chunks.join(sources, chunks.c.source_id == sources.c.id))
+            )
+            with self.engine.connect() as connection:
+                rows = [dict(row._mapping) for row in connection.execute(statement)]
+        terms = self._tokens(query)
+        if not terms:
+            return []
+        ranked = []
+        for row in rows:
+            body_terms = self._tokens(row["text"])
+            score = len(terms & body_terms)
+            if score:
+                retrieved = row["retrieved_at"]
+                if isinstance(retrieved, datetime):
+                    if retrieved.tzinfo is None:
+                        retrieved = retrieved.replace(tzinfo=timezone.utc)
+                    retrieved = retrieved.isoformat()
+                ranked.append((score, {
+                    "source_id": row["source_id"],
+                    "title": row["title"],
+                    "url": row["url"],
+                    "retrieved_at": retrieved,
+                    "segment_id": row.get("segment_id") or row["id"],
+                    "text": row["text"],
+                    "timestamp_start": row.get("timestamp_start"),
+                    "timestamp_end": row.get("timestamp_end"),
+                    "source_type": row.get("source_type"),
+                    "usage_basis": row.get("usage_basis"),
+                }))
+        ranked.sort(key=lambda item: (-item[0], item[1]["source_id"], item[1]["segment_id"]))
+        return [item for _, item in ranked[:limit]]
