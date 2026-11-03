@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus-ai-core/schemas/strategy.schema.json",
+  "title": "NEXUS Strategy Specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "strategy_id",
+    "name",
+    "version",
+    "status",
+    "instrument",
+    "market",
+    "timeframes",
+    "hypothesis",
+    "rules",
+    "risk_model",
+    "execution_model",
+    "data_assumptions",
+    "provenance"
+  ],
+  "properties": {
+    "strategy_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "candidate",
+        "backtested",
+        "oos_validated",
+        "demo_approved",
+        "demo_active",
+        "suspended",
+        "retired"
+      ]
+    },
+    "instrument": {
+      "type": "string",
+      "minLength": 1
+    },
+    "market": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_class",
+        "quote_currency"
+      ],
+      "properties": {
+        "asset_class": {
+          "enum": [
+            "forex",
+            "metal",
+            "index",
+            "commodity",
+            "crypto",
+            "equity",
+            "other"
+          ]
+        },
+        "quote_currency": {
+          "type": "string"
+        },
+        "broker_symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "session": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "timezone",
+        "windows",
+        "trading_days"
+      ],
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "start",
+              "end"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "start": {
+                "type": "string",
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+              },
+              "end": {
+                "type": "string",
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+              }
+            }
+          }
+        },
+        "trading_days": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday"
+            ]
+          }
+        },
+        "exclude_holidays": {
+          "type": "boolean"
+        }
+      }
+    },
+    "timeframes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "setup",
+        "trigger"
+      ],
+      "properties": {
+        "context": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "setup": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "trigger": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "hypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement",
+        "ict_concepts"
+      ],
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 10
+        },
+        "ict_concepts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_market_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bias",
+        "setup",
+        "trigger",
+        "entry",
+        "stop_loss",
+        "take_profit",
+        "invalidation",
+        "exit"
+      ],
+      "properties": {
+        "bias": {
+          "type": "object"
+        },
+        "setup": {
+          "type": "object"
+        },
+        "trigger": {
+          "type": "object"
+        },
+        "entry": {
+          "type": "object"
+        },
+        "stop_loss": {
+          "type": "object"
+        },
+        "take_profit": {
+          "type": "object"
+        },
+        "invalidation": {
+          "type": "object"
+        },
+        "exit": {
+          "type": "object"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "risk_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_per_trade",
+        "max_positions",
+        "sizing_method"
+      ],
+      "properties": {
+        "risk_per_trade": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "max_positions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sizing_method": {
+          "enum": [
+            "fixed_fractional",
+            "fixed_lot",
+            "fixed_risk_amount",
+            "external_central_risk"
+          ]
+        },
+        "max_daily_trades": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "max_daily_loss": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "max_drawdown": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "execution_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_type",
+        "entry_timing",
+        "partial_fills",
+        "same_bar_policy"
+      ],
+      "properties": {
+        "order_type": {
+          "enum": [
+            "market",
+            "limit",
+            "stop",
+            "mixed"
+          ]
+        },
+        "entry_timing": {
+          "type": "string"
+        },
+        "partial_fills": {
+          "type": "boolean"
+        },
+        "same_bar_policy": {
+          "enum": [
+            "stop_first",
+            "target_first",
+            "lower_timeframe_reconstruction",
+            "reject_ambiguous"
+          ]
+        },
+        "max_slippage": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "data_assumptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price_basis",
+        "bar_timestamp_convention",
+        "required_fields",
+        "cost_model"
+      ],
+      "properties": {
+        "price_basis": {
+          "enum": [
+            "bid",
+            "ask",
+            "mid",
+            "bid_ask"
+          ]
+        },
+        "bar_timestamp_convention": {
+          "enum": [
+            "bar_open",
+            "bar_close"
+          ]
+        },
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "cost_model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "spread",
+            "commission",
+            "slippage"
+          ],
+          "properties": {
+            "spread": {
+              "type": "object"
+            },
+            "commission": {
+              "type": "object"
+            },
+            "slippage": {
+              "type": "object"
+            },
+            "swap": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "created_by",
+        "created_at",
+        "sources",
+        "user_rules_used",
+        "agent_inferences"
+      ],
+      "properties": {
+        "created_by": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "title",
+              "url",
+              "retrieved_at"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "retrieved_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "segment_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "timestamp_range": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "user_rules_used": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "agent_inferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
