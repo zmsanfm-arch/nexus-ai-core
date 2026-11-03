@@ -60,6 +60,27 @@ class TradingRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class KnowledgeSourceRecord(Base):
+    __tablename__ = "knowledge_sources"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    usage_basis: Mapped[str] = mapped_column(String(32), nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class KnowledgeChunkRecord(Base):
+    __tablename__ = "knowledge_chunks"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(String(12000), nullable=False)
+    timestamp_start: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    timestamp_end: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
     def __init__(self, database_url: str | None = None):
@@ -181,6 +202,61 @@ class SQLAlchemyStore:
                 if record.record_type != record_type or record.environment != environment:
                     raise ValueError("Trading record identity and environment are immutable")
                 record.data = dict(data)
+
+    def save_knowledge_source(self, source: dict, chunks: list[dict]):
+        """Persist provenance and bounded text segments for authorized source material."""
+        allowed_basis = {"official_public_excerpt", "user_provided", "licensed"}
+        if source.get("usage_basis") not in allowed_basis:
+            raise ValueError("Source usage basis must be explicit and permitted")
+        if not source.get("title") or not source.get("url") or not chunks:
+            raise ValueError("Source title, URL and at least one chunk are required")
+        with self._lock, self.sessions.begin() as session:
+            if session.get(KnowledgeSourceRecord, source["id"]) is not None:
+                raise ValueError("Knowledge source IDs are immutable; create a new source revision")
+            session.add(KnowledgeSourceRecord(
+                id=source["id"], title=source["title"], url=source["url"],
+                source_type=source.get("source_type", "web"),
+                usage_basis=source["usage_basis"],
+                retrieved_at=source["retrieved_at"],
+                metadata_json=dict(source.get("metadata", {})),
+            ))
+            for chunk in chunks:
+                chunk_id = f'{source["id"]}:{chunk["ordinal"]}'
+                session.add(KnowledgeChunkRecord(
+                    id=chunk_id, source_id=source["id"], ordinal=chunk["ordinal"],
+                    text=chunk["text"], timestamp_start=chunk.get("timestamp_start"),
+                    timestamp_end=chunk.get("timestamp_end"),
+                ))
+
+    def search_knowledge(self, query: str, limit: int = 10):
+        terms = [term.strip().lower() for term in query.split() if term.strip()]
+        if not terms:
+            return []
+        limit = max(1, min(limit, 50))
+        with self.sessions() as session:
+            rows = session.query(KnowledgeChunkRecord, KnowledgeSourceRecord).join(
+                KnowledgeSourceRecord, KnowledgeChunkRecord.source_id == KnowledgeSourceRecord.id
+            ).all()
+            ranked = []
+            for chunk, source in rows:
+                haystack = chunk.text.lower()
+                score = sum(haystack.count(term) for term in terms)
+                if score:
+                    ranked.append((score, chunk, source))
+            ranked.sort(key=lambda item: (-item[0], item[1].source_id, item[1].ordinal))
+            return [{
+                "score": score,
+                "source_id": chunk.source_id,
+                "title": source.title,
+                "url": source.url,
+                "source_type": source.source_type,
+                "usage_basis": source.usage_basis,
+                "retrieved_at": source.retrieved_at.isoformat(),
+                "segment_id": chunk.id,
+                "timestamp_start": chunk.timestamp_start,
+                "timestamp_end": chunk.timestamp_end,
+                "text": chunk.text,
+            } for score, chunk, source in ranked[:limit]]
 
     def close(self):
         self.engine.dispose()
