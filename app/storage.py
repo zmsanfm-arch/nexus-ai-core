@@ -194,6 +194,7 @@ class InMemoryStore:
         self.tasks = {}
         self.approvals = {}
         self.audit = []
+        self.queue = {}
         self._lock = RLock()
 
     def save_task(self, task):
@@ -213,6 +214,73 @@ class InMemoryStore:
         with self._lock:
             item = self.approvals.get(approval_id)
             return dict(item) if item else None
+
+
+    def enqueue_task(self, task):
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            if task["id"] in self.queue:
+                raise ValueError("Task is already queued.")
+            self.queue[task["id"]] = {
+                "task_id": task["id"], "status": "queued", "attempts": 0,
+                "available_at": now, "lease_owner": None, "lease_expires_at": None,
+                "last_error": None, "updated_at": now,
+            }
+
+    def claim_next_task(self, worker_id, lease_seconds=60):
+        if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
+            raise ValueError("Invalid worker identity or lease duration.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            candidates = [
+                item for item in self.queue.values()
+                if item["available_at"] <= now and (
+                    item["status"] == "queued" or (
+                        item["status"] == "leased" and item["lease_expires_at"] <= now
+                    )
+                )
+            ]
+            if not candidates:
+                return None
+            item = min(candidates, key=lambda x: (x["available_at"], x["task_id"]))
+            item["status"] = "leased"
+            item["attempts"] += 1
+            item["lease_owner"] = worker_id
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
+
+    def complete_queued_task(self, task_id, worker_id):
+        return self._finish_queued_task(task_id, worker_id, "completed", None)
+
+    def fail_queued_task(self, task_id, worker_id, error, max_attempts=3, retry_delay_seconds=30):
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if item is None or item["status"] != "leased" or item["lease_owner"] != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            item["last_error"] = str(error)[:500]
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["status"] = "dead" if item["attempts"] >= max_attempts else "queued"
+            item["available_at"] = now + timedelta(seconds=retry_delay_seconds)
+            item["updated_at"] = now
+            return item["status"]
+
+    def _finish_queued_task(self, task_id, worker_id, status, error):
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if item is None or item["status"] != "leased" or item["lease_owner"] != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            item["status"] = status
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["last_error"] = error
+            item["updated_at"] = now
+            return status
 
     def append_audit(self, event):
         with self._lock:
