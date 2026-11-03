@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import uuid
 from collections import defaultdict, deque
 import json
 from datetime import datetime
@@ -14,12 +15,13 @@ from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate, KnowledgeSourceCreate, ICTMentorInvocationCreate
+from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate, KnowledgeSourceCreate, ICTMentorInvocationCreate, StrategyTransitionCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.agents.ict_mentor import ICTMentorRuntime
+from app.services.strategy_lifecycle import evaluate_transition
 from app.security import authenticate, require_admin
 from app.storage import store
 
@@ -289,3 +291,62 @@ def invoke_ict_mentor(payload: ICTMentorInvocationCreate):
         "source_claim_count": len(result["source_claims"]),
     })
     return result
+
+
+@app.post("/strategies/{strategy_id}/versions/{version}/transitions")
+def transition_strategy(
+    strategy_id: str,
+    version: str,
+    payload: StrategyTransitionCreate,
+    reviewer_id: str = Depends(require_admin),
+):
+    strategy = store.get_strategy_version(strategy_id, version)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Strategy version not found")
+    history = store.list_strategy_transitions(strategy_id)
+    current_state = history[-1]["to_state"] if history else strategy["status"]
+    decision = evaluate_transition(current_state, payload.target_state, payload.evidence)
+    if not decision.allowed:
+        store.append_audit({
+            "event": "strategy_transition_blocked",
+            "strategy_id": strategy_id,
+            "version": version,
+            "from_state": current_state,
+            "to_state": payload.target_state,
+            "missing_evidence": list(decision.missing_evidence),
+            "actor": reviewer_id,
+        })
+        raise HTTPException(
+            status_code=409,
+            detail={"reason": decision.reason, "missing_evidence": list(decision.missing_evidence)},
+        )
+    transition = {
+        "transition_id": str(uuid.uuid4()),
+        "strategy_id": strategy_id,
+        "version": version,
+        "from_state": current_state,
+        "to_state": payload.target_state,
+        "evidence": payload.evidence,
+        "actor": reviewer_id,
+        "recorded_at": datetime.now().astimezone().isoformat(),
+    }
+    store.save_research_record("strategy_transition", transition["transition_id"], transition)
+    store.append_audit({
+        "event": "strategy_transition_accepted",
+        "strategy_id": strategy_id,
+        "version": version,
+        "from_state": current_state,
+        "to_state": payload.target_state,
+        "actor": reviewer_id,
+    })
+    return transition
+
+
+@app.get("/strategies/{strategy_id}/versions/{version}/transitions", dependencies=[Depends(authenticate)])
+def get_strategy_transitions(strategy_id: str, version: str):
+    strategy = store.get_strategy_version(strategy_id, version)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Strategy version not found")
+    history = [item for item in store.list_strategy_transitions(strategy_id) if item["version"] == version]
+    current_state = history[-1]["to_state"] if history else strategy["status"]
+    return {"strategy_id": strategy_id, "version": version, "current_state": current_state, "history": history}
