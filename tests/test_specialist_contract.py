@@ -104,6 +104,7 @@ def test_specialist_output_uses_structured_provenance_and_advisory_fields():
         }],
         risk_decision="refer_to_central_risk_engine",
         execution_result=None,
+        uncertainties=[],
     )
     assert result.source_claims[0].segment_id == "seg-4"
     assert result.agent_inferences[0].confidence == "medium"
