@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, governance
+from app.main import app, governance, store
 
 
 @pytest.fixture
@@ -227,3 +227,35 @@ def test_security_middleware_sets_request_id_and_rejects_oversized_body(client):
         json={"objective": "analyze market structure"},
     )
     assert oversized.status_code == 413
+
+
+def test_strategy_lifecycle_api_blocks_missing_evidence_and_records_transition(client):
+    strategy_id = "lifecycle-test-strategy"
+    store.create_strategy_version(strategy_id, "1.0.0", {"strategy_id": strategy_id, "version": "1.0.0", "status": "draft"})
+    headers = {"Authorization": "Bearer test-admin-token"}
+    blocked = client.post(
+        f"/strategies/{strategy_id}/versions/1.0.0/transitions",
+        headers=headers,
+        json={"target_state": "candidate", "evidence": {"complete_specification": True}},
+    )
+    assert blocked.status_code == 409
+    assert "deterministic_rules" in blocked.json()["detail"]["missing_evidence"]
+
+    evidence = {
+        "complete_specification": True,
+        "deterministic_rules": True,
+        "provenance_complete": True,
+        "assumptions_documented": True,
+    }
+    accepted = client.post(
+        f"/strategies/{strategy_id}/versions/1.0.0/transitions",
+        headers=headers,
+        json={"target_state": "candidate", "evidence": evidence},
+    )
+    assert accepted.status_code == 200
+    history = client.get(
+        f"/strategies/{strategy_id}/versions/1.0.0/transitions",
+        headers={"Authorization": "Bearer test-api-token"},
+    )
+    assert history.status_code == 200
+    assert history.json()["current_state"] == "candidate"
