@@ -151,3 +151,40 @@ def test_strategy_contract_rejects_path_payload_mismatch(client):
     )
     assert response.status_code == 422
     assert "must match URL" in response.json()["detail"]
+
+
+def test_knowledge_source_ingestion_and_provenance_search(client):
+    payload = {
+        "id": "ict-source-test",
+        "title": "ICT public excerpt",
+        "url": "https://www.youtube.com/@InnerCircleTrader",
+        "source_type": "video_transcript",
+        "usage_basis": "official_public_excerpt",
+        "retrieved_at": "2026-11-04T10:00:00Z",
+        "metadata": {"publisher": "ICT"},
+        "chunks": [{"ordinal": 0, "text": "Fair value gap and liquidity concepts", "timestamp_start": "00:01:00", "timestamp_end": "00:02:00"}],
+    }
+    created = client.post(
+        "/knowledge/sources",
+        headers={"Authorization": "Bearer test-admin-token"},
+        json=payload,
+    )
+    assert created.status_code == 200
+    found = client.get(
+        "/knowledge/search?q=fair%20value%20gap",
+        headers={"Authorization": "Bearer test-api-token"},
+    )
+    assert found.status_code == 200
+    result = found.json()["results"][0]
+    assert result["source_id"] == "ict-source-test"
+    assert result["segment_id"] == "ict-source-test:0"
+    assert result["url"] == payload["url"]
+
+
+def test_knowledge_ingestion_requires_admin(client):
+    response = client.post(
+        "/knowledge/sources",
+        headers={"Authorization": "Bearer test-api-token"},
+        json={"id": "abc", "title": "x", "url": "https://example.com", "usage_basis": "licensed", "retrieved_at": "2026-11-04T10:00:00Z", "chunks": [{"ordinal": 0, "text": "test"}]},
+    )
+    assert response.status_code == 403
