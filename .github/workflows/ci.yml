@@ -32,3 +32,6 @@ jobs:
         env:
           DATABASE_URL: sqlite:///./data/ci-migrations.db
         run: alembic upgrade head
+
+      - name: Build container image
+        run: docker build --tag nexus-ai-core:ci .
