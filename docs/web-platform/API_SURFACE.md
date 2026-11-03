@@ -72,3 +72,15 @@ Use stable machine-readable codes such as:
 - `APPROVAL_REQUIRED`
 
 Never represent unavailable service data as valid zero values. Include field-level validation details without leaking internal stack traces.
+
+
+## Implemented research endpoints (current baseline)
+
+| Method | Route | Access | State |
+|---|---|---|---|
+| GET | `/strategies/{strategy_id}/versions/{version}` | authenticated | implemented; returns an immutable version |
+| POST | `/strategies/{strategy_id}/versions` | admin | implemented; validates the Strategy Specification JSON Schema and rejects duplicate versions |
+| GET | `/research/experiments/{experiment_id}` | authenticated | implemented |
+| POST | `/research/experiments` | admin | implemented; validates the Experiment Plan schema and stores immutable plans |
+
+These endpoints register research artifacts only. They do not start backtests, approve strategies, enable Demo execution or expose Live operations. The strategy and experiment APIs currently lack list/search pagination and artifact upload/download endpoints.
