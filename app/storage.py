@@ -116,6 +116,9 @@ class SQLAlchemyStore:
             existing = session.get(TaskQueueRecord, task["id"])
             if existing is not None:
                 raise ValueError("Task is already queued.")
+            task_record = session.get(TaskRecord, task["id"])
+            if task_record is None:
+                session.add(TaskRecord(id=task["id"], data=dict(task)))
             session.add(TaskQueueRecord(
                 task_id=task["id"], status="queued", attempts=0,
                 available_at=now, lease_owner=None, lease_expires_at=None,
@@ -221,6 +224,7 @@ class InMemoryStore:
         with self._lock:
             if task["id"] in self.queue:
                 raise ValueError("Task is already queued.")
+            self.tasks[task["id"]] = dict(task)
             self.queue[task["id"]] = {
                 "task_id": task["id"], "status": "queued", "attempts": 0,
                 "available_at": now, "lease_owner": None, "lease_expires_at": None,
