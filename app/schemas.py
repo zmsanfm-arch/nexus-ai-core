@@ -48,3 +48,12 @@ class KnowledgeSourceCreate(StrictRequest):
     retrieved_at: str
     metadata: dict = Field(default_factory=dict)
     chunks: list[KnowledgeChunkCreate] = Field(min_length=1)
+
+
+class ICTMentorInvocationCreate(StrictRequest):
+    task_type: str = Field(pattern=r"^ict\.(education|source_lookup|chart_analysis|strategy_formalization|trade_review)$")
+    request: str = Field(min_length=1, max_length=8000)
+    context: dict = Field(default_factory=dict)
+    chart: dict | None = None
+    trade: dict | None = None
+    user_rules: list[dict] = Field(default_factory=list)
