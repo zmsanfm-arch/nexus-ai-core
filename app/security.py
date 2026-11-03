@@ -13,26 +13,32 @@ class Principal:
 
 def authenticate(authorization: str | None = Header(default=None)) -> Principal:
     """Authenticate server-issued bearer credentials; fail closed when unconfigured."""
-    credentials = {
-        os.getenv("NEXUS_ADMIN_TOKEN", "").strip(): Principal(
-            os.getenv("NEXUS_ADMIN_ID", "").strip(), "admin"
-        ),
-        os.getenv("NEXUS_API_TOKEN", "").strip(): Principal(
-            os.getenv("NEXUS_API_ID", "api-client").strip(), "operator"
-        ),
-    }
-    credentials.pop("", None)
-    if not credentials:
+    admin_token = os.getenv("NEXUS_ADMIN_TOKEN", "").strip()
+    admin_id = os.getenv("NEXUS_ADMIN_ID", "").strip()
+    api_token = os.getenv("NEXUS_API_TOKEN", "").strip()
+    api_id = os.getenv("NEXUS_API_ID", "api-client").strip()
+
+    configured = []
+    if admin_token:
+        if not admin_id:
+            raise HTTPException(status_code=503, detail="Administrator identity is not configured")
+        configured.append((admin_token, Principal(admin_id, "admin")))
+    if api_token:
+        if not api_id:
+            raise HTTPException(status_code=503, detail="API client identity is not configured")
+        configured.append((api_token, Principal(api_id, "operator")))
+
+    if not configured:
         raise HTTPException(status_code=503, detail="Authentication is not configured")
+    if len({token for token, _ in configured}) != len(configured):
+        raise HTTPException(status_code=503, detail="Authentication credentials are misconfigured")
 
     scheme, separator, supplied = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not separator or not supplied:
         raise HTTPException(status_code=401, detail="Bearer authentication required")
 
-    for token, principal in credentials.items():
+    for token, principal in configured:
         if hmac.compare_digest(supplied, token):
-            if not principal.subject:
-                raise HTTPException(status_code=503, detail="Authenticated identity is not configured")
             return principal
     raise HTTPException(status_code=403, detail="Invalid credentials")
 
