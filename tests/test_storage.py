@@ -27,3 +27,29 @@ def test_missing_records_return_none(tmp_path):
     assert store.get_task("missing") is None
     assert store.get_approval("missing") is None
     store.close()
+
+
+def test_strategy_versions_are_insert_only_and_immutable(tmp_path):
+    store = SQLAlchemyStore(f"sqlite:///{tmp_path / 'strategy.db'}")
+    payload = {"strategy_id": "gold-ict", "version": "1.0.0", "status": "draft"}
+    key = store.create_strategy_version("gold-ict", "1.0.0", payload)
+    assert key == "gold-ict:1.0.0"
+    assert store.get_strategy_version("gold-ict", "1.0.0") == payload
+    import pytest
+    with pytest.raises(ValueError, match="immutable"):
+        store.create_strategy_version("gold-ict", "1.0.0", {"status": "demo_active"})
+    assert store.get_strategy_version("gold-ict", "1.0.0") == payload
+    store.close()
+
+
+def test_research_and_demo_records_are_environment_scoped(tmp_path):
+    store = SQLAlchemyStore(f"sqlite:///{tmp_path / 'records.db'}")
+    store.save_research_record("experiment", "exp-1", {"dataset": "bars-v1"})
+    assert store.get_research_record("exp-1") == {
+        "record_type": "experiment", "dataset": "bars-v1"
+    }
+    store.save_trading_record("demo_account", "account-1", "demo", {"broker": "demo"})
+    import pytest
+    with pytest.raises(ValueError, match="Live trading persistence is disabled"):
+        store.save_trading_record("order", "order-live-1", "live", {"side": "buy"})
+    store.close()
