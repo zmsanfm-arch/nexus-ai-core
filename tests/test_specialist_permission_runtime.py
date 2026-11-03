@@ -27,6 +27,13 @@ class Handler:
             agent_id="ict_mentor",
             mode="advisory",
             answer="Advisory only",
+            source_claims=[],
+            user_rules_used=[],
+            agent_inferences=[],
+            proposed_actions=[],
+            risk_decision="not_assessed_by_specialist",
+            execution_result=None,
+            uncertainties=[],
         )
 
 
@@ -38,7 +45,7 @@ def test_runtime_blocks_handler_when_manifest_has_no_permission():
         store,
         handlers={"ict_mentor": handler},
     )
-    request = SpecialistInput(task_id="task-1", task_type="ict.education")
+    request = SpecialistInput(task_id="task-1", task_type="ict.education", request="Explain a concept")
 
     with pytest.raises(SpecialistUnavailable, match="not been granted"):
         runtime.run("ict.education", request)
@@ -49,11 +56,11 @@ def test_runtime_blocks_handler_when_manifest_has_no_permission():
 def test_runtime_dispatches_only_when_manifest_and_core_policy_allow():
     handler = Handler()
     runtime = SpecialistRuntime(
-        Registry(["ict.advisory.education"]),
+        Registry(["user_input.read"]),
         InMemoryStore(),
         handlers={"ict_mentor": handler},
     )
-    request = SpecialistInput(task_id="task-2", task_type="ict.education")
+    request = SpecialistInput(task_id="task-2", task_type="ict.education", request="Explain a concept")
 
     result = runtime.run("ict.education", request)
 
