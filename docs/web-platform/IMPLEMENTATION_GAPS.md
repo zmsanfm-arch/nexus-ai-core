@@ -53,3 +53,16 @@ Do not request or commit passwords, API keys, broker credentials or private toke
 - administrator account enrollment through a secure invite flow.
 
 Until these are resolved, local development and repository-level implementation can continue, but public deployment must remain blocked.
+
+
+## Persistence implementation update
+
+- Alembic migration infrastructure is now present (`alembic.ini`, `migrations/env.py`, versioned revisions).
+- The initial migration captures tasks, approvals and audit events; the next revision adds strategy versions, research records and environment-scoped trading records.
+- Strategy versions are insert-only through the storage API. A duplicate `(strategy_id, version)` is rejected.
+- Research record types are constrained to experiments, backtest runs, trades and evaluator results.
+- Trading record types are constrained to risk events, Demo accounts, orders and positions. The storage API rejects the `live` environment.
+- SQLite auto-creates schema for development/tests. PostgreSQL schema creation is migration-owned unless `NEXUS_AUTO_CREATE_SCHEMA=true` is explicitly set.
+- Apply migrations with `alembic upgrade head` after configuring `DATABASE_URL`.
+
+Remaining persistence work: replace generic JSON payload records with fully normalized domain tables and enforce append-only audit at the database permission/trigger layer; add repository-level pagination, filtering, retention and artifact storage. This baseline is not yet production-ready.
