@@ -2,6 +2,7 @@ import json
 import uuid
 
 from app.agents.ict_mentor import ICTMentorHandler
+from app.services.knowledge_store import KnowledgeStoreAdapter
 from app.services.risk import classify_risk
 from app.services.model_router import ModelNotConfigured, ModelProviderError
 from app.services.agent_framework import AgentFramework, AgentContractError
@@ -22,8 +23,9 @@ class Orchestrator:
         self.agent_framework = AgentFramework(model_router, storage)
         # Specialists are injected by the core. They receive no tools, credentials,
         # broker connection, or execution gateway.
+        knowledge_store = KnowledgeStoreAdapter(storage)
         handlers = {
-            "ict_mentor": ICTMentorHandler(model_router=model_router, storage=storage),
+            "ict_mentor": ICTMentorHandler(model_router=model_router, storage=knowledge_store),
         }
         self.specialist_runtime = SpecialistRuntime(
             registry=registry,
