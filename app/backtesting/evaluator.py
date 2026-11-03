@@ -17,6 +17,8 @@ class Evaluation:
     profit_factor: float | None
     net_profit: float
     average_trade_pnl: float | None
+    expectancy_r: float | None
+    average_r: float | None
     max_drawdown: float
     equity_curve: tuple[float, ...]
 
@@ -31,6 +33,7 @@ def evaluate_trades(trades: Sequence[TradeResult], initial_equity: float) -> Eva
     breakeven = len(pnls) - wins - losses
     gross_profit = sum(pnl for pnl in pnls if pnl > 0)
     gross_loss = abs(sum(pnl for pnl in pnls if pnl < 0))
+    r_values = [trade.r_multiple for trade in ordered if trade.r_multiple is not None]
     equity = initial_equity
     peak = initial_equity
     max_drawdown = 0.0
@@ -48,6 +51,8 @@ def evaluate_trades(trades: Sequence[TradeResult], initial_equity: float) -> Eva
         profit_factor=(gross_profit / gross_loss) if gross_loss else None,
         net_profit=sum(pnls),
         average_trade_pnl=(sum(pnls) / len(pnls)) if pnls else None,
+        expectancy_r=(sum(r_values) / len(r_values)) if r_values else None,
+        average_r=(sum(r_values) / len(r_values)) if r_values else None,
         max_drawdown=max_drawdown, equity_curve=tuple(curve),
     )
 
@@ -89,6 +94,7 @@ def evaluate_acceptance(
             failed.append(name)
 
     min_expectancy = criteria.get("minimum_expectancy_r")
+    expectancy_r = evaluation.expectancy_r if expectancy_r is None else expectancy_r
     if min_expectancy is None or expectancy_r is None:
         unevaluable.append("minimum_expectancy_r")
     elif expectancy_r >= min_expectancy:
