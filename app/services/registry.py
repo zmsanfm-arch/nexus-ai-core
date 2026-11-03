@@ -2,6 +2,7 @@ class AgentRegistry:
     """Static capability catalog only; entries are not runtime registrations."""
     def __init__(self):
         self._agents = {
+            "ict_mentor": {"name": "ICT Mentor", "status": "specification", "permissions": ["knowledge.retrieve", "user_input.read", "chart_attachment.read"]},
             "research": {"name": "Research Agent", "status": "catalog_only", "permissions": []},
             "analysis": {"name": "Analysis Agent", "status": "catalog_only", "permissions": []},
             "developer": {"name": "Developer Agent", "status": "catalog_only", "permissions": []},
