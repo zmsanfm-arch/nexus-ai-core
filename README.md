@@ -15,7 +15,9 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 
 - FastAPI service and agent registry.
 - Deterministic risk classification and approval records.
-- Bearer-protected approval decisions.
+- Bearer-protected approval decisions and administrator-only audit reads.
+- Bearer authentication required for agent discovery and task APIs (`NEXUS_API_TOKEN`).
+- Central specialist permission gate: core allowlist and explicit manifest permission must both match.
 - OpenAI-compatible model adapter using server-side environment variables.
 - Durable SQLAlchemy storage for tasks, approvals, and audit events.
 - SQLite file storage by default; PostgreSQL-compatible through `DATABASE_URL`.
@@ -42,7 +44,7 @@ Without all three required model settings, task submissions return `blocked`; th
 
 ## Approval administration
 
-Set `NEXUS_ADMIN_TOKEN` and `NEXUS_ADMIN_ID` only in the server-side secret manager. Reviewer identity is derived from server configuration, not request data.
+Set `NEXUS_API_TOKEN`, `NEXUS_ADMIN_TOKEN`, and `NEXUS_ADMIN_ID` only in the server-side secret manager. Agent discovery and task APIs require the API bearer token. Approval decisions and audit reads require the administrator bearer token. Reviewer identity is derived from server configuration, not request data. If a required token is absent, the protected API fails closed with HTTP 503.
 
 ## API
 
@@ -51,6 +53,7 @@ Set `NEXUS_ADMIN_TOKEN` and `NEXUS_ADMIN_ID` only in the server-side secret mana
 - `POST /tasks`
 - `GET /tasks/{task_id}`
 - `POST /approvals/{approval_id}/decision` (administrator bearer token required)
+- `GET /audit?limit=100` (administrator bearer token required; maximum 500 events)
 
 ## Current limitations
 
