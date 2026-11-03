@@ -10,11 +10,12 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate, KnowledgeSourceCreate
+from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate, KnowledgeSourceCreate, ICTMentorInvocationCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
+from app.agents.ict_mentor import ICTMentorRuntime
 from app.security import authenticate, require_admin
 from app.storage import store
 
@@ -57,6 +58,7 @@ registry = AgentRegistry()
 governance = GovernanceService(store)
 model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
+ict_mentor_runtime = ICTMentorRuntime(model_router, store)
 
 
 @app.get("/health")
@@ -222,3 +224,22 @@ def search_knowledge(q: str, limit: int = 10):
         raise HTTPException(status_code=422, detail="Query must contain 1 to 500 characters")
     results = store.search_knowledge(q, limit)
     return {"query": q, "results": results, "retrieval_mode": "lexical_baseline"}
+
+
+@app.post("/agents/ict-mentor/invoke", dependencies=[Depends(authenticate)])
+def invoke_ict_mentor(payload: ICTMentorInvocationCreate):
+    invocation = {
+        **payload.model_dump(),
+        "mode": "advisory",
+    }
+    try:
+        result = ict_mentor_runtime.invoke(invocation)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    store.append_audit({
+        "event": "ict_mentor_invoked",
+        "task_type": payload.task_type,
+        "risk_decision": result["risk_decision"],
+        "source_claim_count": len(result["source_claims"]),
+    })
+    return result
