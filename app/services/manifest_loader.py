@@ -19,6 +19,7 @@ class AgentManifest(BaseModel):
     mode: Literal["advisory"]
     capabilities: tuple[str, ...] = ()
     permissions: tuple[str, ...] = ()
+    requested_permissions: tuple[str, ...] = ()
 
 
 def load_manifest(path: str | Path) -> AgentManifest:
