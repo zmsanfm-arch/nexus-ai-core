@@ -40,11 +40,9 @@ class ICTMentorRuntime:
         if errors:
             raise ValueError(f"Invalid ICT Mentor input: {errors[0].message}")
 
-        sources = payload.get("retrieved_sources", [])
-        if not sources:
-            query = payload["request"]
-            matches = self.storage.search_knowledge(query, limit=8)
-            sources = [{
+        # Client-supplied provenance is never trusted; retrieve from NEXUS storage only.
+        matches = self.storage.search_knowledge(payload["request"], limit=8)
+        sources = [{
                 "source_id": item["source_id"],
                 "title": item["title"],
                 "url": item["url"],
@@ -53,8 +51,8 @@ class ICTMentorRuntime:
                 "timestamp_start": item["timestamp_start"],
                 "timestamp_end": item["timestamp_end"],
                 "summary": item["text"][:1200],
-            } for item in matches]
-            payload = {**payload, "retrieved_sources": sources}
+        } for item in matches]
+        payload = {**payload, "retrieved_sources": sources}
 
         prompt = (
             "Return one JSON object only. Follow the output schema exactly.\n"
@@ -71,9 +69,14 @@ class ICTMentorRuntime:
         if errors:
             return self._blocked("Specialist output did not satisfy the required advisory contract.")
 
-        valid_sources = {(item["source_id"], item["segment_id"]) for item in sources}
-        if any((claim["source_id"], claim["segment_id"]) not in valid_sources for claim in result["source_claims"]):
-            return self._blocked("A source claim did not match a retrieved source segment.")
+        valid_sources = {(item["source_id"], item["segment_id"]): item for item in sources}
+        for claim in result["source_claims"]:
+            source = valid_sources.get((claim["source_id"], claim["segment_id"]))
+            if source is None:
+                return self._blocked("A source claim did not match a retrieved source segment.")
+            for field in ("title", "url", "retrieved_at", "timestamp_start", "timestamp_end"):
+                if claim.get(field) != source.get(field):
+                    return self._blocked("A source claim altered retrieved provenance metadata.")
         confirmed_rules = {
             (rule["rule_id"], rule["text"])
             for rule in payload.get("user_rules", [])
