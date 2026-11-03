@@ -29,7 +29,10 @@ def test_long_trade_uses_explicit_costs_and_stop_fill():
 
 
 def test_same_bar_ambiguity_can_be_rejected():
-    bars = [Candle(ts(1), 100, 104, 97, 101)]
+    bars = [
+        Candle(ts(1), 100, 101, 99, 100),
+        Candle(ts(2), 100, 104, 97, 101),
+    ]
     intent = TradeIntent("t2", "long", ts(0), ts(1), 100, 98, 103)
     with pytest.raises(ValueError, match="Ambiguous"):
         run_backtest(bars, [intent], BacktestConfig(same_bar_policy="reject_ambiguous"))
