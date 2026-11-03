@@ -1,0 +1,6 @@
+.venv/
+__pycach__/
+*\.py[co]
+.pytest_cache/
+.sequence/store/
+.env
