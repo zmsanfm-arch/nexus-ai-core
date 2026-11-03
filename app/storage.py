@@ -34,6 +34,21 @@ class AuditRecord(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+
+
+
+class TaskQueueRecord(Base):
+    __tablename__ = "task_queue"
+    task_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
     def __init__(self, database_url: str | None = None):
@@ -93,6 +108,81 @@ class SQLAlchemyStore:
                 {**record.data, "recorded_at": record.recorded_at.isoformat()}
                 for record in reversed(records)
             ]
+
+
+    def enqueue_task(self, task: dict):
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            existing = session.get(TaskQueueRecord, task["id"])
+            if existing is not None:
+                raise ValueError("Task is already queued.")
+            session.add(TaskQueueRecord(
+                task_id=task["id"], status="queued", attempts=0,
+                available_at=now, lease_owner=None, lease_expires_at=None,
+                last_error=None, updated_at=now,
+            ))
+
+    def claim_next_task(self, worker_id: str, lease_seconds: int = 60):
+        if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
+            raise ValueError("Invalid worker identity or lease duration.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            query = (
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.available_at <= now,
+                    (TaskQueueRecord.status == "queued") |
+                    ((TaskQueueRecord.status == "leased") &
+                     (TaskQueueRecord.lease_expires_at <= now)),
+                )
+                .order_by(TaskQueueRecord.available_at.asc(), TaskQueueRecord.task_id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+            record = session.scalar(query)
+            if record is None:
+                return None
+            record.status = "leased"
+            record.attempts += 1
+            record.lease_owner = worker_id
+            record.lease_expires_at = now + __import__("datetime").timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return {"task_id": record.task_id, "attempts": record.attempts,
+                    "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
+
+    def complete_queued_task(self, task_id: str, worker_id: str):
+        return self._finish_queued_task(task_id, worker_id, "completed", None)
+
+    def fail_queued_task(self, task_id: str, worker_id: str, error: str,
+                         max_attempts: int = 3, retry_delay_seconds: int = 30):
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        safe_error = str(error)[:500]
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(TaskQueueRecord, task_id)
+            if record is None or record.status != "leased" or record.lease_owner != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            record.last_error = safe_error
+            record.lease_owner = None
+            record.lease_expires_at = None
+            record.status = "dead" if record.attempts >= max_attempts else "queued"
+            record.available_at = now + __import__("datetime").timedelta(seconds=retry_delay_seconds)
+            record.updated_at = now
+            return record.status
+
+    def _finish_queued_task(self, task_id: str, worker_id: str, status: str, error):
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(TaskQueueRecord, task_id)
+            if record is None or record.status != "leased" or record.lease_owner != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            record.status = status
+            record.lease_owner = None
+            record.lease_expires_at = None
+            record.last_error = error
+            record.updated_at = now
+            return status
 
     def close(self):
         self.engine.dispose()
