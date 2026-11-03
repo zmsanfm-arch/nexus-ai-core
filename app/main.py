@@ -74,6 +74,15 @@ def create_task(
     return orchestrator.submit(payload.objective, payload.task_type, payload.context, principal_id=principal_id)
 
 
+
+@app.post("/tasks/queued", response_model=TaskView)
+def enqueue_task(payload: TaskCreate, principal_id: str = Depends(require_api_access)):
+    try:
+        return task_queue.enqueue(payload.objective, payload.task_type, payload.context, principal_id=principal_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @app.get("/tasks/{task_id}", response_model=TaskView)
 def get_task(task_id: str, principal_id: str = Depends(require_api_access)):
     task = store.get_task(task_id)
