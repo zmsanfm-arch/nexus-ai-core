@@ -4,13 +4,14 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 
 ## Release 0.3.0
 
-- FastAPI service and agent registry.
-- Deterministic risk classification and approval records.
-- Bearer-protected approval decisions.
-- OpenAI-compatible model adapter using server-side environment variables.
-- Durable SQLAlchemy storage for tasks, approvals, and audit events.
-- SQLite file storage by default; PostgreSQL-compatible through `DATABASE_URL`.
-- GitHub Actions continuous integration.
+- FastAPI central API with authenticated routes and a specification-aware agent registry.
+- Static bootstrap bearer auth plus provider-agnostic OIDC JWT verification and group-based roles.
+- Central ICT Mentor advisory runtime with schema validation and provenance checks; no execution permissions.
+- Provenance-aware source ingestion and lexical retrieval for authorized ICT knowledge segments.
+- Strategy specification/experiment registration, immutable strategy versions and evidence-gated lifecycle history.
+- Strict OHLC CSV import, immutable dataset storage, deterministic single-position backtest foundation and evaluation metrics.
+- SQLAlchemy persistence, Alembic migrations and database-enforced append-only audit triggers.
+- GitHub Actions tests and clean-database migration verification.
 
 ## Configure a model
 
@@ -27,27 +28,30 @@ Without all three required model settings, task submissions return `blocked`; th
 ## Storage
 
 - Default: `sqlite:///./data/nexus.db` (the directory is created automatically).
-- PostgreSQL: set `DATABASE_URL` to a PostgreSQL SQLAlchemy URL when a PostgreSQL service is available.
-- Tasks, approvals, and audit events persist across process restarts.
-- SQLite is suitable for this single-instance MVP, not concurrent multi-instance production deployment.
+- PostgreSQL: configure `DATABASE_URL`, then apply `alembic upgrade head`.
+- Strategy versions and knowledge source IDs are immutable; audit events are append-only under the database migrations.
+- SQLite remains a development/single-instance option, not a concurrent multi-instance production database.
 
-## Approval administration
+## Authentication
 
-Set `NEXUS_ADMIN_TOKEN` and `NEXUS_ADMIN_ID` only in the server-side secret manager. Reviewer identity is derived from server configuration, not request data.
+For local development, configure distinct `NEXUS_ADMIN_TOKEN` / `NEXUS_ADMIN_ID` and `NEXUS_API_TOKEN` / `NEXUS_API_ID` values. For a hosted deployment, configure `NEXUS_AUTH_MODE=oidc` with issuer, audience, JWKS URL, and admin/operator group mapping. Static tokens are bootstrap-only; never expose them in a browser.
 
 ## API
 
-- `GET /health`
-- `GET /agents`
-- `POST /tasks`
-- `GET /tasks/{task_id}`
-- `POST /approvals/{approval_id}/decision` (administrator bearer token required)
+- `GET /health` (public liveness only)
+- `GET /agents`, `POST /agents/ict-mentor/invoke`
+- `POST /knowledge/sources`, `GET /knowledge/search`
+- `POST /market-data/datasets`, dataset metadata/candle reads
+- strategy version, experiment and lifecycle routes
+- `POST /tasks`, `GET /tasks/{task_id}`
+- `POST /approvals/{approval_id}/decision` (admin only)
 
 ## Current limitations
 
-- Model adapter is synchronous and single-provider.
-- Bounded multi-agent planning, external tool execution, production identity, rate limits, and durable workflow orchestration are not implemented.
-- The service is not production-ready. Do not expose it publicly before deployment hardening and security review.
+- The ICT knowledge search is lexical, not embedding-based RAG; no approved full source corpus has been ingested.
+- Backtesting is a deterministic foundation, not a complete portfolio/bid-ask/walk-forward engine.
+- PostgreSQL, OIDC provider, web console, MT5 Demo connector, central production Risk Engine and Execution Gateway remain unprovisioned/incomplete.
+- Demo promotion and Live trading are disabled. The API is not production-ready; do not expose it publicly.
 
 ## Local development
 
