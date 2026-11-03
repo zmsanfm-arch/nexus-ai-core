@@ -85,7 +85,8 @@ def test_authentication_fails_closed_when_unconfigured(monkeypatch):
     monkeypatch.delenv("NEXUS_ADMIN_TOKEN", raising=False)
     monkeypatch.delenv("NEXUS_API_TOKEN", raising=False)
     monkeypatch.delenv("NEXUS_ADMIN_ID", raising=False)
-    response = TestClient(app).get("/agents")
+    monkeypatch.setenv("NEXUS_AUTH_MODE", "static")
+    response = TestClient(app).get("/agents", headers={"Authorization": "Bearer any-token"})
     assert response.status_code == 503
 
 
