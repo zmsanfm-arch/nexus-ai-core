@@ -1,10 +1,14 @@
 import os
+import json
+from pathlib import Path
+
+from jsonschema import Draft202012Validator
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.schemas import TaskCreate, TaskView, ApprovalDecision
+from app.schemas import TaskCreate, TaskView, ApprovalDecision, StrategyVersionCreate, ExperimentCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
@@ -89,3 +93,79 @@ def decide_approval(
         raise HTTPException(status_code=404, detail="Approval not found")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+
+def _validate_contract(schema_name: str, payload: dict) -> None:
+    schema_path = Path(__file__).resolve().parents[1] / "docs" / "strategy-research" / "schemas" / schema_name
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        errors = sorted(Draft202012Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="Research schema is unavailable or invalid") from exc
+    if errors:
+        first = errors[0]
+        location = ".".join(str(part) for part in first.path) or "$"
+        raise HTTPException(status_code=422, detail=f"Invalid research contract at {location}: {first.message}")
+
+
+@app.post("/strategies/{strategy_id}/versions")
+def create_strategy_version(
+    strategy_id: str,
+    payload: StrategyVersionCreate,
+    reviewer_id: str = Depends(require_admin),
+):
+    data = payload.data
+    if data.get("strategy_id") != strategy_id:
+        raise HTTPException(status_code=422, detail="strategy_id in payload must match URL")
+    _validate_contract("strategy.schema.json", data)
+    try:
+        record_id = store.create_strategy_version(strategy_id, data["version"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    store.append_audit({
+        "event": "strategy_version_created",
+        "strategy_id": strategy_id,
+        "version": data["version"],
+        "actor": reviewer_id,
+        "status": data["status"],
+    })
+    return {"id": record_id, "strategy_id": strategy_id, "version": data["version"], "status": data["status"]}
+
+
+@app.get("/strategies/{strategy_id}/versions/{version}", dependencies=[Depends(authenticate)])
+def get_strategy_version(strategy_id: str, version: str):
+    data = store.get_strategy_version(strategy_id, version)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Strategy version not found")
+    return {"strategy_id": strategy_id, "version": version, "data": data}
+
+
+@app.post("/research/experiments")
+def create_experiment(
+    payload: ExperimentCreate,
+    reviewer_id: str = Depends(require_admin),
+):
+    data = payload.data
+    _validate_contract("experiment-plan.schema.json", data)
+    try:
+        store.save_research_record("experiment", data["experiment_id"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    store.append_audit({
+        "event": "research_experiment_created",
+        "experiment_id": data["experiment_id"],
+        "actor": reviewer_id,
+        "strategy_id": data["strategy_id"],
+        "strategy_version": data["strategy_version"],
+    })
+    return {"experiment_id": data["experiment_id"], "status": "registered"}
+
+
+@app.get("/research/experiments/{experiment_id}", dependencies=[Depends(authenticate)])
+def get_experiment(experiment_id: str):
+    record = store.get_research_record(experiment_id)
+    if record is None or record.get("record_type") != "experiment":
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return {"experiment_id": experiment_id, "data": {k: v for k, v in record.items() if k != "record_type"}}
