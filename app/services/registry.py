@@ -34,6 +34,7 @@ class AgentRegistry:
                     "mode": manifest.mode,
                     "capabilities": list(manifest.capabilities),
                     "permissions": list(manifest.permissions),
+                    "requested_permissions": list(manifest.requested_permissions),
                 }
 
     def list_agents(self):
