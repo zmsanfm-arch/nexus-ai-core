@@ -33,7 +33,7 @@ class SpecialistInput(StrictModel):
     task_id: str = Field(min_length=1, max_length=128)
     task_type: str = Field(min_length=1, max_length=128)
     mode: Literal["advisory"] = "advisory"
-    request: str = Field(default="", max_length=8_000)
+    request: str = Field(min_length=1, max_length=8_000)
     context: dict[str, Any] = Field(default_factory=dict)
     chart: dict[str, Any] | None = None
     trade: dict[str, Any] | None = None
@@ -87,20 +87,20 @@ class ProposedAction(StrictModel):
 class SpecialistResult(StrictModel):
     """Strict advisory output; execution_result is structurally forced to null."""
     agent_id: str = Field(min_length=1)
-    mode: Literal["advisory"] = "advisory"
+    mode: Literal["advisory"]
     answer: str
-    source_claims: list[SourceClaim] = Field(default_factory=list)
-    user_rules_used: list[UserRuleUsed] = Field(default_factory=list)
-    agent_inferences: list[AgentInference] = Field(default_factory=list)
-    proposed_actions: list[ProposedAction] = Field(default_factory=list)
+    source_claims: list[SourceClaim]
+    user_rules_used: list[UserRuleUsed]
+    agent_inferences: list[AgentInference]
+    proposed_actions: list[ProposedAction]
     risk_decision: Literal[
         "not_requested",
         "not_assessed_by_specialist",
         "refer_to_central_risk_engine",
         "blocked_insufficient_information",
-    ] = "not_assessed_by_specialist"
-    execution_result: None = None
-    uncertainties: list[str] = Field(default_factory=list)
+    ]
+    execution_result: None
+    uncertainties: list[str]
 
 
 @runtime_checkable
