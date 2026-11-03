@@ -49,3 +49,8 @@ Every retrieved passage should return:
 `source_id`, `title`, `canonical_url`, `start_timestamp`, `end_timestamp`, `concept_tags`, `excerpt_or_summary`, and `source_confidence`.
 
 A response must be able to show the source title and timestamp. If a source cannot be resolved, it must not be presented as a verified ICT teaching.
+
+
+## Implemented NEXUS knowledge path
+
+The core API now supports admin-only source ingestion at `POST /knowledge/sources` and authenticated lexical retrieval at `GET /knowledge/search`. Each indexed segment retains source ID, title, HTTPS URL, usage basis, retrieval time, segment ID and optional media timestamps. Source IDs are immutable. Accepted usage bases are `official_public_excerpt`, `user_provided`, and `licensed`; do not ingest full copyrighted transcripts unless an appropriate license or user-provided basis permits it. The current retrieval method is lexical and deterministic, not embedding-based RAG. ICT Mentor ignores client-supplied source metadata and retrieves only from central NEXUS storage.
