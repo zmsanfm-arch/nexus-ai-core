@@ -7,7 +7,7 @@ from dataclasses import asdict
 import uuid
 from collections import defaultdict, deque
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -383,7 +383,7 @@ async def import_market_dataset(
             dataset = load_ohlc_csv(
                 temp.name,
                 expected_interval=(
-                    __import__("datetime").timedelta(seconds=expected_interval_seconds)
+                    timedelta(seconds=expected_interval_seconds)
                     if expected_interval_seconds else None
                 ),
             )
