@@ -66,3 +66,9 @@ Until these are resolved, local development and repository-level implementation 
 - Apply migrations with `alembic upgrade head` after configuring `DATABASE_URL`.
 
 Remaining persistence work: replace generic JSON payload records with fully normalized domain tables and enforce append-only audit at the database permission/trigger layer; add repository-level pagination, filtering, retention and artifact storage. This baseline is not yet production-ready.
+
+
+## Audit integrity update
+
+- Migration `0004_audit_append_only` installs database triggers that reject UPDATE and DELETE on `audit_events` for SQLite and PostgreSQL.
+- Audit history remains append-only through the database migration path. Production database credentials should still use a least-privilege application role and a separate migration role; trigger enforcement does not replace database access controls.
