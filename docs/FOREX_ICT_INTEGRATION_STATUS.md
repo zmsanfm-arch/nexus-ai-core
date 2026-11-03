@@ -23,9 +23,9 @@ NEXUS AI CORE is the only runtime authority. Forex/ICT Mentor is a specialist ca
 - MT5 or broker connectivity, broker credentials, account/position access, order submission/cancellation, or live trading.
 - Specialist-controlled changes to permissions, risk policy, approvals, or execution.
 
-## Forex research capabilities requiring selective port and validation
+## Forex research capabilities ported as libraries
 
-The Forex branch also contains OHLC CSV ingestion, deterministic backtesting, evaluation/acceptance gates, immutable strategy versions, strategy lifecycle transitions, market dataset storage, and database migrations. These are not yet fully connected to the core API and core persistence branch. They must be ported selectively, tested against the core storage/API, and not merged wholesale because the Forex branch also contains overlapping API, authentication, storage, and orchestration infrastructure.
+The deterministic OHLC backtesting engine, trade-ledger evaluator, CSV market-data validator, strategy lifecycle evidence gates, and their source schemas/tests/docs have been selectively copied into the integration branch. They are currently library-level capabilities; the core does not yet expose a complete authenticated backtest/dataset/strategy API or durable research-record persistence for them. Those API and persistence pieces still require integration and tests. The Forex branch's overlapping API, authentication, storage, and orchestration infrastructure was deliberately not copied wholesale.
 
 Backtesting remains research-only. It uses explicit trade intents and midpoint OHLC candles; it is not a broker-grade execution simulator. It does not prove live profitability or authorize trading.
 
