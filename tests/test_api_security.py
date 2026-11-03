@@ -188,3 +188,26 @@ def test_knowledge_ingestion_requires_admin(client):
         json={"id": "abc", "title": "x", "url": "https://example.com", "usage_basis": "licensed", "retrieved_at": "2026-11-04T10:00:00Z", "chunks": [{"ordinal": 0, "text": "test"}]},
     )
     assert response.status_code == 403
+
+
+def test_ict_mentor_invocation_is_central_and_advisory_only(client):
+    response = client.post(
+        "/agents/ict-mentor/invoke",
+        headers={"Authorization": "Bearer test-api-token"},
+        json={"task_type": "ict.education", "request": "Explain fair value gaps"},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["agent_id"] == "ict_mentor"
+    assert result["mode"] == "advisory"
+    assert result["execution_result"] is None
+    assert result["risk_decision"] == "blocked_insufficient_information"
+
+
+def test_ict_mentor_invocation_rejects_unsupported_capabilities(client):
+    response = client.post(
+        "/agents/ict-mentor/invoke",
+        headers={"Authorization": "Bearer test-api-token"},
+        json={"task_type": "ict.autonomous_execution", "request": "Open a trade"},
+    )
+    assert response.status_code == 422
