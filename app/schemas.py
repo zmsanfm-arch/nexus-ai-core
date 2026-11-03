@@ -30,3 +30,21 @@ class StrategyVersionCreate(StrictRequest):
 
 class ExperimentCreate(StrictRequest):
     data: dict = Field(min_length=1)
+
+
+class KnowledgeChunkCreate(StrictRequest):
+    ordinal: int = Field(ge=0)
+    text: str = Field(min_length=1, max_length=12000)
+    timestamp_start: str | None = None
+    timestamp_end: str | None = None
+
+
+class KnowledgeSourceCreate(StrictRequest):
+    id: str = Field(min_length=3, max_length=128)
+    title: str = Field(min_length=1, max_length=512)
+    url: str = Field(min_length=8, max_length=2048)
+    source_type: str = Field(default="web", pattern="^(web|video_transcript|document|user_upload)$")
+    usage_basis: str = Field(pattern="^(official_public_excerpt|user_provided|licensed)$")
+    retrieved_at: str
+    metadata: dict = Field(default_factory=dict)
+    chunks: list[KnowledgeChunkCreate] = Field(min_length=1)
