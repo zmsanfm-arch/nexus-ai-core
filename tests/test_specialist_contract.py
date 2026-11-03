@@ -5,12 +5,12 @@ from app.services.manifest_loader import ManifestError, load_manifest
 from app.services.specialist_contract import SpecialistInput, SpecialistResult
 
 
-def test_ict_manifest_loads_disabled_and_advisory_only():
+def test_ict_manifest_loads_registered_and_advisory_only():
     manifest = load_manifest("agents/ict_mentor/agent.yaml")
     assert manifest.agent_id == "ict_mentor"
-    assert manifest.status == "disabled"
+    assert manifest.status == "registered"
     assert manifest.mode == "advisory"
-    assert manifest.permissions == ()
+    assert set(manifest.permissions) == {"knowledge.retrieve", "user_input.read", "chart_attachment.read"}
     assert "ict.chart_analysis" in manifest.capabilities
 
 
