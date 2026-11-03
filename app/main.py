@@ -76,6 +76,14 @@ class RequestGuardMiddleware(BaseHTTPMiddleware):
         if request.url.path != "/health":
             client_host = request.client.host if request.client else "unknown"
             now = time.monotonic()
+            if client_host not in _REQUEST_TIMES and len(_REQUEST_TIMES) >= 10000:
+                stale_hosts = [host for host, times in _REQUEST_TIMES.items() if not times or now - times[-1] >= _RATE_LIMIT_WINDOW]
+                for host in stale_hosts:
+                    _REQUEST_TIMES.pop(host, None)
+                if len(_REQUEST_TIMES) >= 10000:
+                    response = JSONResponse({"detail": "Rate limiter capacity reached"}, status_code=503)
+                    response.headers["X-Request-ID"] = request_id
+                    return response
             bucket = _REQUEST_TIMES[client_host]
             while bucket and now - bucket[0] >= _RATE_LIMIT_WINDOW:
                 bucket.popleft()
