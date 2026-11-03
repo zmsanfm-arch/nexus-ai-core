@@ -1,0 +1,104 @@
+{
+  "education": {
+    "input": {
+      "task_type": "ict.education",
+      "mode": "advisory",
+      "request": "Explain ICT displacement and distinguish sourced teaching from your interpretation.",
+      "retrieved_sources": [],
+      "user_rules": []
+    },
+    "output": {
+      "agent_id": "ict_mentor",
+      "mode": "advisory",
+      "answer": "No official ICT source segment was supplied or retrieved. I will not present a specific definition as verified ICT doctrine. Retrieve a relevant official lesson before attributing detailed criteria to ICT.",
+      "source_claims": [],
+      "user_rules_used": [],
+      "agent_inferences": [
+        {
+          "inference": "This is an educational request that can be answered in advisory mode.",
+          "basis": "Task type ict.education.",
+          "confidence": "high"
+        }
+      ],
+      "proposed_actions": [],
+      "risk_decision": "not_requested",
+      "execution_result": null,
+      "uncertainties": [
+        "No source title, URL, or timestamped segment was provided."
+      ]
+    }
+  },
+  "chart_analysis": {
+    "input": {
+      "task_type": "ict.chart_analysis",
+      "mode": "advisory",
+      "request": "Analyze my XAUUSD chart for structure and a possible setup.",
+      "chart": {
+        "attachment_ref": "user-uploaded-chart",
+        "instrument": "XAUUSD",
+        "timeframe": "M15"
+      },
+      "retrieved_sources": [],
+      "user_rules": []
+    },
+    "output": {
+      "agent_id": "ict_mentor",
+      "mode": "advisory",
+      "answer": "The attachment reference contains no inspectable chart image or candle data. No bias, liquidity target, MSS, FVG, entry, stop, or target is inferred. Supply the chart image or OHLC data and timezone/session context.",
+      "source_claims": [],
+      "user_rules_used": [],
+      "agent_inferences": [
+        {
+          "inference": "The payload identifies XAUUSD and M15 but provides no inspectable price data.",
+          "basis": "Only an attachment reference is present.",
+          "confidence": "high"
+        }
+      ],
+      "proposed_actions": [],
+      "risk_decision": "not_assessed_by_specialist",
+      "execution_result": null,
+      "uncertainties": [
+        "Chart content is unavailable.",
+        "Session and timezone are unspecified."
+      ]
+    }
+  },
+  "trade_review": {
+    "input": {
+      "task_type": "ict.trade_review",
+      "mode": "advisory",
+      "request": "Review this completed XAUUSD trade against my confirmed rules.",
+      "trade": {
+        "instrument": "XAUUSD",
+        "status": "closed",
+        "entry": null,
+        "exit": null,
+        "result": null
+      },
+      "user_rules": [],
+      "retrieved_sources": []
+    },
+    "output": {
+      "agent_id": "ict_mentor",
+      "mode": "advisory",
+      "answer": "A rule-compliance review is not possible because entry, exit, result, chart context, and confirmed user rules are missing. I will not invent a personal playbook or score the trade against generic rules as if they were yours.",
+      "source_claims": [],
+      "user_rules_used": [],
+      "agent_inferences": [
+        {
+          "inference": "This is a retrospective review request with an incomplete trade record.",
+          "basis": "Entry, exit, result, and user_rules are missing.",
+          "confidence": "high"
+        }
+      ],
+      "proposed_actions": [],
+      "risk_decision": "not_assessed_by_specialist",
+      "execution_result": null,
+      "uncertainties": [
+        "Trade details are missing.",
+        "No user-confirmed rules were supplied.",
+        "No chart or source evidence was supplied."
+      ]
+    }
+  }
+}
