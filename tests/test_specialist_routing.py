@@ -49,7 +49,7 @@ def test_specialist_runtime_requires_handler_even_if_registered():
             return [{"id": "demo_specialist", "status": "registered"}]
 
     runtime = SpecialistRuntime(Registry(), InMemoryStore())
-    request = SpecialistInput(task_id="task-1", task_type="demo.run")
+    request = SpecialistInput(task_id="task-1", task_type="demo.run", request="Run demo task")
     with pytest.raises(SpecialistUnavailable):
         runtime.run("demo.run", request)
 
@@ -59,6 +59,13 @@ def test_specialist_result_is_advisory_and_execution_is_null():
         agent_id="ict_mentor",
         mode="advisory",
         answer="Chart analysis only",
+        source_claims=[],
+        user_rules_used=[],
+        agent_inferences=[],
+        proposed_actions=[],
+        risk_decision="not_assessed_by_specialist",
+        execution_result=None,
+        uncertainties=[],
     )
     assert result.execution_result is None
 
