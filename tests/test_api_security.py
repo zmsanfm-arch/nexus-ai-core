@@ -107,3 +107,17 @@ def test_configured_admin_token_requires_identity(monkeypatch):
         "/agents", headers={"Authorization": "Bearer admin-token"}
     )
     assert response.status_code == 503
+
+
+def test_registry_does_not_advertise_placeholder_agents_as_active(client):
+    response = client.get(
+        "/agents", headers={"Authorization": "Bearer test-api-token"}
+    )
+    assert response.status_code == 200
+    agents = {agent["id"]: agent for agent in response.json()["agents"]}
+    assert agents["executor"]["status"] == "disabled"
+    assert agents["executor"]["permissions"] == []
+    assert all(
+        agent["status"] in {"catalog_only", "disabled"}
+        for agent in agents.values()
+    )
