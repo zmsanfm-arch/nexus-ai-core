@@ -101,3 +101,39 @@ def test_audit_endpoint_rejects_invalid_limit(client):
         headers={"Authorization": "Bearer test-secret-token"},
     )
     assert response.status_code == 422
+
+
+
+def test_queued_task_endpoint_requires_api_auth(monkeypatch):
+    monkeypatch.delenv("NEXUS_API_TOKEN", raising=False)
+    response = TestClient(app).post(
+        "/tasks/queued", json={"objective": "Queue a task for a worker"}
+    )
+    assert response.status_code == 503
+
+
+def test_queued_task_is_owned_by_configured_api_principal(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "queue-api-token")
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "service-a")
+    client = TestClient(app)
+    response = client.post(
+        "/tasks/queued",
+        headers={"Authorization": "Bearer queue-api-token"},
+        json={"objective": "Queue a task for a worker"},
+    )
+    assert response.status_code == 200
+    task_id = response.json()["id"]
+    assert response.json()["status"] == "queued"
+
+    own_read = client.get(
+        f"/tasks/{task_id}",
+        headers={"Authorization": "Bearer queue-api-token"},
+    )
+    assert own_read.status_code == 200
+
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "service-b")
+    other_read = client.get(
+        f"/tasks/{task_id}",
+        headers={"Authorization": "Bearer queue-api-token"},
+    )
+    assert other_read.status_code == 404
