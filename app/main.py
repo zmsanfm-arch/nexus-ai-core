@@ -54,7 +54,7 @@ if allowed_origins:
 
 _RATE_LIMIT_WINDOW = 60.0
 _RATE_LIMIT_MAX_REQUESTS = int(os.getenv("NEXUS_RATE_LIMIT_PER_MINUTE", "120"))
-_MAX_REQUEST_BYTES = int(os.getenv("NEXUS_MAX_REQUEST_BYTES", "1048576"))
+_MAX_REQUEST_BYTES = int(os.getenv("NEXUS_MAX_REQUEST_BYTES", "6291456"))
 _REQUEST_TIMES = defaultdict(deque)
 
 
