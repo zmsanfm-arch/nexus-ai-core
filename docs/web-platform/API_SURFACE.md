@@ -97,3 +97,10 @@ These endpoints register research artifacts only. They do not start backtests, a
 |---|---|---|---|
 | POST | `/strategies/{strategy_id}/versions/{version}/transitions` | admin | implemented; evidence-gated lifecycle transition with audit |
 | GET | `/strategies/{strategy_id}/versions/{version}/transitions` | authenticated | implemented; current state derived from immutable transition history |
+
+
+| Method | Route | Access | State |
+|---|---|---|---|
+| POST | `/market-data/datasets` | admin | implemented; strict OHLC CSV import, SHA-256 pinning and quality report; 5 MiB cap |
+| GET | `/market-data/datasets/{dataset_id}` | authenticated | implemented; dataset metadata and quality |
+| GET | `/market-data/datasets/{dataset_id}/candles` | authenticated | implemented; paginated candle retrieval |
