@@ -117,7 +117,8 @@ def test_registry_does_not_advertise_placeholder_agents_as_active(client):
     agents = {agent["id"]: agent for agent in response.json()["agents"]}
     assert agents["executor"]["status"] == "disabled"
     assert agents["executor"]["permissions"] == []
+    assert agents["ict_mentor"]["status"] == "specification"
     assert all(
-        agent["status"] in {"catalog_only", "disabled"}
+        agent["status"] in {"catalog_only", "disabled", "specification"}
         for agent in agents.values()
     )
