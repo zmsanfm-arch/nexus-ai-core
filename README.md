@@ -18,6 +18,7 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 - Bearer-protected approval decisions and administrator-only audit reads.
 - Bearer authentication required for agent discovery and task APIs (`NEXUS_API_TOKEN`).
 - Central specialist permission gate: core allowlist and explicit manifest permission must both match.
+- Public task and specialist context is JSON-bounded to 16 KiB before dispatch.
 - OpenAI-compatible model adapter using server-side environment variables.
 - Durable SQLAlchemy storage for tasks, approvals, and audit events.
 - SQLite file storage by default; PostgreSQL-compatible through `DATABASE_URL`.
