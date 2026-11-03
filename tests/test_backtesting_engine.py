@@ -50,3 +50,25 @@ def test_invalid_long_levels_are_rejected():
     intent = TradeIntent("t4", "long", ts(0), ts(1), 100, 101, 105)
     with pytest.raises(ValueError, match="ordering"):
         run_backtest([Candle(ts(1), 100, 101, 99, 100)], [intent])
+
+
+def test_single_position_engine_rejects_overlapping_intents():
+    bars = [
+        Candle(ts(1), 100, 101, 99, 100),
+        Candle(ts(2), 100, 104, 99, 103),
+    ]
+    first = TradeIntent("t5", "long", ts(0), ts(1), 100, 98, 103)
+    second = TradeIntent("t6", "long", ts(1), ts(2), 100, 98, 103)
+    with pytest.raises(ValueError, match="Overlapping"):
+        run_backtest(bars, [first, second])
+
+
+def test_favorable_gap_through_target_uses_open_price():
+    bars = [
+        Candle(ts(1), 100, 101, 99, 100),
+        Candle(ts(2), 105, 106, 104, 105),
+    ]
+    intent = TradeIntent("t7", "long", ts(0), ts(1), 100, 98, 103)
+    result = run_backtest(bars, [intent])[0]
+    assert result.exit_reason == "target"
+    assert result.exit_fill == 105
