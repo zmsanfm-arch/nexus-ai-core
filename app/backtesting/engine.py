@@ -5,6 +5,7 @@ signals or invent entry rules. Prices are midpoint OHLC and costs are explicit.
 """
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 from typing import Literal
 
 
@@ -63,15 +64,24 @@ class TradeResult:
     r_multiple: float | None = None
 
 
+def _aware(value: datetime) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
+
+
 def _valid_intent(intent: TradeIntent) -> None:
     if intent.direction not in ("long", "short"):
         raise ValueError("Unsupported direction")
-    if intent.quantity <= 0:
-        raise ValueError("Quantity must be positive")
+    if not intent.trade_id or len(intent.trade_id) > 128:
+        raise ValueError("Trade ID must contain 1 to 128 characters")
+    if not _aware(intent.signal_time) or not _aware(intent.entry_time):
+        raise ValueError("Trade timestamps must be timezone-aware")
+    if intent.quantity <= 0 or not isfinite(intent.quantity):
+        raise ValueError("Quantity must be finite and positive")
     if intent.entry_time < intent.signal_time:
         raise ValueError("Entry cannot precede signal")
-    if intent.entry_price <= 0 or intent.stop_price <= 0 or intent.target_price <= 0:
-        raise ValueError("Prices must be positive")
+    prices = (intent.entry_price, intent.stop_price, intent.target_price)
+    if any(not isfinite(price) or price <= 0 for price in prices):
+        raise ValueError("Prices must be finite and positive")
     if intent.direction == "long" and not intent.stop_price < intent.entry_price < intent.target_price:
         raise ValueError("Invalid long stop/entry/target ordering")
     if intent.direction == "short" and not intent.target_price < intent.entry_price < intent.stop_price:
@@ -84,24 +94,40 @@ def run_backtest(
     config: BacktestConfig = BacktestConfig(),
 ) -> list[TradeResult]:
     """Run one-trade-at-a-time intents against sorted midpoint OHLC bars."""
-    if config.costs.spread < 0 or config.costs.slippage < 0 or config.costs.commission_per_unit_per_side < 0:
-        raise ValueError("Execution costs cannot be negative")
+    costs = (config.costs.spread, config.costs.slippage, config.costs.commission_per_unit_per_side)
+    if any(not isfinite(value) or value < 0 for value in costs):
+        raise ValueError("Execution costs must be finite and non-negative")
     if config.same_bar_policy not in ("stop_first", "target_first", "reject_ambiguous"):
         raise ValueError("Unsupported same-bar policy")
+    if not candles:
+        raise ValueError("At least one candle is required")
+
     bars = sorted(candles, key=lambda bar: bar.timestamp)
-    if any(bar.high < max(bar.open, bar.close, bar.low) or bar.low > min(bar.open, bar.close, bar.high) for bar in bars):
-        raise ValueError("Invalid OHLC candle")
+    for bar in bars:
+        values = (bar.open, bar.high, bar.low, bar.close)
+        if not _aware(bar.timestamp):
+            raise ValueError("Candle timestamps must be timezone-aware")
+        if any(not isfinite(value) or value <= 0 for value in values):
+            raise ValueError("OHLC prices must be finite and positive")
+        if bar.high < max(bar.open, bar.close, bar.low) or bar.low > min(bar.open, bar.close, bar.high):
+            raise ValueError("Invalid OHLC candle")
     if len({bar.timestamp for bar in bars}) != len(bars):
         raise ValueError("Duplicate candle timestamps")
+
+    for intent in intents:
+        _valid_intent(intent)
+    trade_ids = [intent.trade_id for intent in intents]
+    if len(trade_ids) != len(set(trade_ids)):
+        raise ValueError("Trade IDs must be unique")
+
     results = []
     last_exit_time = None
     for intent in sorted(intents, key=lambda item: (item.entry_time, item.trade_id)):
-        _valid_intent(intent)
         if last_exit_time is not None and intent.entry_time <= last_exit_time:
             raise ValueError("Overlapping trade intents are not supported by this single-position engine")
         eligible = [bar for bar in bars if bar.timestamp >= intent.entry_time]
         if not eligible:
-            continue
+            raise ValueError(f"No candle exists at or after entry time for trade {intent.trade_id}")
         entry_bar = eligible[0]
         half_spread = config.costs.spread / 2
         slip = config.costs.slippage
@@ -132,17 +158,10 @@ def run_backtest(
                 reason = "target"
             if reason:
                 exit_bar = bar
-                # A gap through a stop is filled at the worse opening price.
                 if reason == "stop":
-                    if intent.direction == "long":
-                        exit_mid = min(intent.stop_price, bar.open)
-                    else:
-                        exit_mid = max(intent.stop_price, bar.open)
+                    exit_mid = min(intent.stop_price, bar.open) if intent.direction == "long" else max(intent.stop_price, bar.open)
                 else:
-                    if intent.direction == "long":
-                        exit_mid = max(intent.target_price, bar.open)
-                    else:
-                        exit_mid = min(intent.target_price, bar.open)
+                    exit_mid = max(intent.target_price, bar.open) if intent.direction == "long" else min(intent.target_price, bar.open)
                 break
         if exit_bar is None:
             raise ValueError(f"Trade {intent.trade_id} remains open at the end of the dataset")
