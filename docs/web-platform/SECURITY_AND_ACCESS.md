@@ -69,3 +69,10 @@ The current API foundation uses server-side bearer credentials as a temporary ad
 - Baseline response security headers are applied to API responses.
 
 This is a bootstrap authentication adapter, not production identity management. It does not provide user enrollment, MFA, token expiry/rotation, revocation, fine-grained resource scopes, cookie sessions, CSRF protection or rate limiting. Do not expose the API publicly or treat this baseline as a production security sign-off. Replace the adapter with the selected identity provider before public deployment.
+
+
+## OIDC authentication adapter
+
+The API supports provider-agnostic OIDC JWT validation when `NEXUS_AUTH_MODE=oidc`: signing keys are retrieved from the configured JWKS URL, and issuer, audience, expiration, issued-at, subject and RS256 signature are verified. Group claims map to `admin` or `operator` through explicit environment configuration. Missing configuration, unknown groups, invalid signatures and unavailable JWKS fail closed. Static bearer tokens remain a bootstrap/development mode only; do not use them as the public production identity system. The identity provider, MFA policy, group mapping and issuer/audience values must be provisioned before public deployment.
+
+The request-size guard currently uses `Content-Length`, and rate limiting is per-process. A production ingress/API gateway must also enforce streamed-body limits, shared rate limits, TLS termination, trusted proxy handling and WAF policy. The API baseline is not yet a substitute for a production security review.
