@@ -47,6 +47,9 @@ omitted until separately designed, authorized, and tested.
 - Disabled means not dispatchable.
 - Capabilities are routing metadata, not authorization.
 - Empty permissions mean no granted operational permissions.
+- Every specialist dispatch must pass the central `PermissionService`: the capability must
+  map to a core-owned permission, that permission must be in the core allowlist, and the
+  agent manifest must explicitly declare the same permission. Unknown capabilities fail closed.
 - Specialist output cannot approve itself or change policy.
 - No broker/MT5 connectivity is exposed through this interface.
 - Any future execution path must be a separate central service with independent deterministic
