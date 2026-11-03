@@ -1,48 +1,86 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class SpecialistInput(BaseModel):
+class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class SpecialistInput(StrictModel):
+    """Advisory request envelope compatible with ICT Mentor Contract v1."""
     task_id: str = Field(min_length=1, max_length=128)
     task_type: str = Field(min_length=1, max_length=128)
+    mode: Literal["advisory"] = "advisory"
+    request: str = Field(default="", max_length=8_000)
     context: dict[str, Any] = Field(default_factory=dict)
+    chart: dict[str, Any] | None = None
+    trade: dict[str, Any] | None = None
+    user_rules: list[dict[str, Any]] = Field(default_factory=list)
+    retrieved_sources: list[dict[str, Any]] = Field(default_factory=list)
+    correlation_id: str | None = Field(default=None, max_length=128)
 
-    @field_validator("context")
+    @field_validator("context", "chart", "trade", "user_rules", "retrieved_sources")
     @classmethod
-    def context_must_be_bounded_json(cls, value):
+    def payloads_must_be_bounded_json(cls, value):
+        if value is None:
+            return value
         try:
             encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
         except (TypeError, ValueError) as exc:
-            raise ValueError("Specialist context must contain JSON-compatible values.") from exc
+            raise ValueError("Specialist payload must contain JSON-compatible values.") from exc
         if len(encoded.encode("utf-8")) > 16_384:
-            raise ValueError("Specialist context exceeds the 16 KiB limit.")
+            raise ValueError("Specialist payload exceeds the 16 KiB limit.")
         return value
 
 
-class SourceClaim(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SourceClaim(StrictModel):
     claim: str = Field(min_length=1)
-    source_title: str = Field(min_length=1)
-    source_url: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    url: str = Field(min_length=1)
     retrieved_at: str = Field(min_length=1)
-    locator: str | None = None
+    segment_id: str = Field(min_length=1)
+    published_at: str | None = None
+    timestamp_start: str | None = None
+    timestamp_end: str | None = None
 
 
-class SpecialistResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class UserRuleUsed(StrictModel):
+    rule_id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class AgentInference(StrictModel):
+    inference: str = Field(min_length=1)
+    basis: str = Field(min_length=1)
+    confidence: Literal["low", "medium", "high"]
+
+
+class ProposedAction(StrictModel):
+    action: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    requires_central_review: Literal[True] = True
+
+
+class SpecialistResult(StrictModel):
+    """Strict advisory output; execution_result is structurally forced to null."""
     agent_id: str = Field(min_length=1)
-    mode: str = Field(pattern=r"^(advisory|disabled)$")
+    mode: Literal["advisory"] = "advisory"
     answer: str
     source_claims: list[SourceClaim] = Field(default_factory=list)
-    user_rules_used: list[str] = Field(default_factory=list)
-    agent_inferences: list[str] = Field(default_factory=list)
-    proposed_actions: list[str] = Field(default_factory=list)
-    risk_decision: str = "not_assessed"
+    user_rules_used: list[UserRuleUsed] = Field(default_factory=list)
+    agent_inferences: list[AgentInference] = Field(default_factory=list)
+    proposed_actions: list[ProposedAction] = Field(default_factory=list)
+    risk_decision: Literal[
+        "not_requested",
+        "not_assessed_by_specialist",
+        "refer_to_central_risk_engine",
+        "blocked_insufficient_information",
+    ] = "not_assessed_by_specialist"
     execution_result: None = None
     uncertainties: list[str] = Field(default_factory=list)
 
