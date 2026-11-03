@@ -10,6 +10,24 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ConfirmedUserRule(StrictModel):
+    rule_id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    status: Literal["user_confirmed"]
+
+
+class RetrievedSource(StrictModel):
+    source_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    url: str = Field(min_length=1)
+    retrieved_at: str = Field(min_length=1)
+    segment_id: str = Field(min_length=1)
+    published_at: str | None = None
+    timestamp_start: str | None = None
+    timestamp_end: str | None = None
+    summary: str | None = None
+
+
 class SpecialistInput(StrictModel):
     """Advisory request envelope compatible with ICT Mentor Contract v1."""
     task_id: str = Field(min_length=1, max_length=128)
@@ -19,8 +37,8 @@ class SpecialistInput(StrictModel):
     context: dict[str, Any] = Field(default_factory=dict)
     chart: dict[str, Any] | None = None
     trade: dict[str, Any] | None = None
-    user_rules: list[dict[str, Any]] = Field(default_factory=list)
-    retrieved_sources: list[dict[str, Any]] = Field(default_factory=list)
+    user_rules: list[ConfirmedUserRule] = Field(default_factory=list)
+    retrieved_sources: list[RetrievedSource] = Field(default_factory=list)
     correlation_id: str | None = Field(default=None, max_length=128)
 
     @field_validator("context", "chart", "trade", "user_rules", "retrieved_sources")
