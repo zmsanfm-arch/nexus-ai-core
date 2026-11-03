@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -145,7 +145,7 @@ class SQLAlchemyStore:
             record.status = "leased"
             record.attempts += 1
             record.lease_owner = worker_id
-            record.lease_expires_at = now + __import__("datetime").timedelta(seconds=lease_seconds)
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
             record.updated_at = now
             return {"task_id": record.task_id, "attempts": record.attempts,
                     "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
@@ -167,7 +167,7 @@ class SQLAlchemyStore:
             record.lease_owner = None
             record.lease_expires_at = None
             record.status = "dead" if record.attempts >= max_attempts else "queued"
-            record.available_at = now + __import__("datetime").timedelta(seconds=retry_delay_seconds)
+            record.available_at = now + timedelta(seconds=retry_delay_seconds)
             record.updated_at = now
             return record.status
 
