@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from app.backtesting.engine import TradeResult
 from app.backtesting.evaluator import evaluate_trades
 
@@ -21,7 +23,7 @@ def test_evaluator_reports_ledger_metrics_and_drawdown():
     assert result.win_rate == 2 / 3
     assert result.profit_factor == 3
     assert result.net_profit == 10
-    assert result.max_drawdown == 0.05
+    assert result.max_drawdown == pytest.approx(5 / 110)
     assert result.equity_curve == (100, 110, 105, 110)
 
 
