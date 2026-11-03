@@ -51,7 +51,7 @@ def list_agents():
 
 @app.post("/tasks", response_model=TaskView)
 def create_task(payload: TaskCreate):
-    return orchestrator.submit(payload.objective)
+    return orchestrator.submit(payload.objective, payload.task_type, payload.context)
 
 
 @app.get("/tasks/{task_id}", response_model=TaskView)
