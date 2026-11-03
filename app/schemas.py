@@ -57,3 +57,8 @@ class ICTMentorInvocationCreate(StrictRequest):
     chart: dict | None = None
     trade: dict | None = None
     user_rules: list[dict] = Field(default_factory=list)
+
+
+class StrategyTransitionCreate(StrictRequest):
+    target_state: str = Field(pattern="^(candidate|backtested|oos_validated|demo_approved|demo_active|suspended|retired)$")
+    evidence: dict = Field(default_factory=dict)
