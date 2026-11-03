@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus-ai-core.local/schemas/ict-mentor-input.schema.json",
+  "title": "ICT Mentor Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_type",
+    "mode",
+    "request"
+  ],
+  "properties": {
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "ict.education",
+        "ict.source_lookup",
+        "ict.chart_analysis",
+        "ict.strategy_formalization",
+        "ict.trade_review"
+      ]
+    },
+    "mode": {
+      "const": "advisory"
+    },
+    "request": {
+      "type": "string",
+      "minLength": 1
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "chart": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Optional user-supplied chart data or attachment reference; never assume live market access."
+    },
+    "trade": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Optional user-supplied trade details."
+    },
+    "user_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "text",
+          "status"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "user_confirmed"
+            ]
+          }
+        }
+      }
+    },
+    "retrieved_sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceSegment"
+      }
+    },
+    "correlation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "sourceSegment": {
+      "type": "object",
+      "required": [
+        "source_id",
+        "title",
+        "url",
+        "retrieved_at",
+        "segment_id"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "segment_id": {
+          "type": "string"
+        },
+        "timestamp_start": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp_end": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
