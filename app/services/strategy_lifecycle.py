@@ -46,6 +46,9 @@ def evaluate_transition(current_state: str, target_state: str, evidence: dict) -
             return LifecycleDecision(True, current_state, target_state, (), "Safety suspension")
         return LifecycleDecision(False, current_state, target_state, ("reason",), "Suspension requires an eligible state and reason")
 
+    if (current_state, target_state) in {("oos_validated", "demo_approved"), ("demo_approved", "demo_active")}:
+        return LifecycleDecision(False, current_state, target_state, (), "Demo promotion is disabled until central risk, approval, MT5 connector and operational controls are implemented and independently verified")
+
     required = TRANSITIONS.get((current_state, target_state))
     if required is None:
         return LifecycleDecision(False, current_state, target_state, (), "Transition is not defined")
