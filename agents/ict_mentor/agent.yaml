@@ -10,3 +10,7 @@ capabilities:
   - ict.strategy_formalization
   - ict.trade_review
 permissions: []
+requested_permissions:
+  - knowledge.retrieve
+  - user_input.read
+  - chart_attachment.read
