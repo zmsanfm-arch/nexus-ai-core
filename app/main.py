@@ -6,28 +6,26 @@ from app.schemas import TaskCreate, TaskView, ApprovalDecision
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
+from app.services.model_router import ModelRouter
 from app.storage import store
 
 app = FastAPI(
     title="NEXUS AI CORE",
-    version="0.1.1",
+    version="0.2.0",
     description="Autonomous multi-agent system foundation",
 )
 
 registry = AgentRegistry()
 governance = GovernanceService(store)
-orchestrator = Orchestrator(registry, governance, store)
+model_router = ModelRouter.from_env()
+orchestrator = Orchestrator(registry, governance, store, model_router)
 
 
 def require_admin(authorization: str | None = Header(default=None)) -> str:
-    """Require a server-configured bearer token; never trust a client-supplied reviewer."""
     expected_token = os.getenv("NEXUS_ADMIN_TOKEN")
     reviewer_id = os.getenv("NEXUS_ADMIN_ID")
     if not expected_token or not reviewer_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Approval administration is not configured on this deployment",
-        )
+        raise HTTPException(status_code=503, detail="Approval administration is not configured")
     scheme, _, supplied_token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not supplied_token:
         raise HTTPException(status_code=401, detail="Bearer authentication required")
@@ -38,7 +36,12 @@ def require_admin(authorization: str | None = Header(default=None)) -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "nexus-ai-core", "version": "0.1.1"}
+    return {
+        "status": "ok",
+        "service": "nexus-ai-core",
+        "version": "0.2.0",
+        "model_configured": model_router.select("health") is not None,
+    }
 
 
 @app.get("/agents")
