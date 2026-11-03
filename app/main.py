@@ -2,13 +2,14 @@ import hmac
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from app.schemas import TaskCreate, TaskView, ApprovalDecision
+from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.storage import store
 from app.services.task_lifecycle import TaskQueueService
+from app.services.knowledge_store import KnowledgeStoreAdapter
 
 app = FastAPI(
     title="NEXUS AI CORE",
@@ -21,6 +22,7 @@ governance = GovernanceService(store)
 model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
+knowledge_store = KnowledgeStoreAdapter(store)
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
@@ -113,3 +115,50 @@ def decide_approval(
         raise HTTPException(status_code=404, detail="Approval not found")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/knowledge/sources")
+def create_knowledge_source(
+    payload: KnowledgeSourceCreate,
+    reviewer_id: str = Depends(require_admin),
+):
+    parsed = __import__("urllib.parse", fromlist=["urlparse"]).urlparse(payload.url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise HTTPException(status_code=422, detail="Knowledge source URL must be HTTPS")
+    try:
+        knowledge_store.save_knowledge_source(
+            {
+                "id": payload.id,
+                "title": payload.title,
+                "url": payload.url,
+                "source_type": payload.source_type,
+                "usage_basis": payload.usage_basis,
+                "retrieved_at": payload.retrieved_at,
+            },
+            [chunk.model_dump() for chunk in payload.chunks],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    store.append_audit({
+        "event": "knowledge_source_ingested",
+        "source_id": payload.id,
+        "actor": reviewer_id,
+        "usage_basis": payload.usage_basis,
+        "chunk_count": len(payload.chunks),
+    })
+    return {"source_id": payload.id, "status": "indexed", "chunk_count": len(payload.chunks)}
+
+
+@app.get("/knowledge/search")
+def search_knowledge(
+    q: str,
+    limit: int = 8,
+    principal_id: str = Depends(require_api_access),
+):
+    if not q.strip() or len(q) > 500:
+        raise HTTPException(status_code=422, detail="Query must contain 1 to 500 characters")
+    try:
+        results = knowledge_store.search_knowledge(q, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"query": q, "results": results, "retrieval_mode": "lexical_baseline"}
