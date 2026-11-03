@@ -56,6 +56,7 @@ class ICTMentorRuntime:
 
         prompt = (
             "Return one JSON object only. Follow the output schema exactly.\n"
+            "OUTPUT_SCHEMA:\n" + json.dumps(self.output_schema, ensure_ascii=False) + "\n"
             "INPUT:\n" + json.dumps(payload, ensure_ascii=False) + "\n"
             "AVAILABLE SOURCE SEGMENTS:\n" + json.dumps(sources, ensure_ascii=False)
         )
