@@ -56,3 +56,16 @@ Record actor, role, action, resource type/ID, decision, reason, timestamp, corre
 ## Release gates
 
 No public internet exposure until identity, authorization, CSRF, CORS, rate limiting, secret management, audit, backups, monitoring and security review are complete. No Demo execution UI until the central risk and execution gates exist. Live remains disabled pending a separate release and explicit governance approval.
+
+## Implemented API baseline (current feature branch)
+
+The current API foundation uses server-side bearer credentials as a temporary adapter:
+- `NEXUS_ADMIN_TOKEN` plus `NEXUS_ADMIN_ID` grants the administrator role used by approval decisions.
+- `NEXUS_API_TOKEN` plus optional `NEXUS_API_ID` grants the operator role for authenticated API access.
+- Credentials are compared server-side; identity and role are never accepted from request payloads.
+- If neither token is configured, protected routes fail closed with HTTP 503. Missing credentials return 401; invalid credentials and insufficient role return 403.
+- `/health` is the only public route and returns minimal liveness information.
+- `NEXUS_CORS_ORIGINS` is an explicit comma-separated origin allowlist. An empty value disables cross-origin browser access.
+- Baseline response security headers are applied to API responses.
+
+This is a bootstrap authentication adapter, not production identity management. It does not provide user enrollment, MFA, token expiry/rotation, revocation, fine-grained resource scopes, cookie sessions, CSRF protection or rate limiting. Do not expose the API publicly or treat this baseline as a production security sign-off. Replace the adapter with the selected identity provider before public deployment.
