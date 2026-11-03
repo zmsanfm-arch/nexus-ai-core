@@ -16,13 +16,11 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 
 ## ICT Mentor integration status
 
-ICT Mentor is registered as disabled and advisory-only. Its initial capabilities are education, source lookup, user-supplied chart analysis, strategy formalization, and trade review.
+ICT Mentor is wired into the central Orchestrator and SpecialistRuntime on the integration branch. It is registered for five advisory capabilities: education, source lookup, chart analysis, strategy formalization, and trade review. Core PermissionService and the explicit manifest grant must both authorize each dispatch.
 
-The central Pydantic contract now models the Forex project's v1 input/output structure, including source provenance, explicitly confirmed user rules, separate model inferences, structured proposed actions, constrained risk-decision vocabulary, and execution_result fixed to null.
+The handler validates the central Pydantic contract, retrieves source segments from the NEXUS-owned knowledge store, checks source provenance, accepts only explicitly confirmed user rules, and structurally forbids execution results. Administrator-only source ingestion and authenticated lexical search endpoints are available. This is a staged integration branch, not a production deployment.
 
-The Forex manifest's three permissions are recorded as requests only: knowledge.retrieve, user_input.read, and chart_attachment.read. The granted permissions list remains empty. The specialist therefore cannot be dispatched. There is no ICT handler, no live market/account access, no MT5/broker connection, and no trade execution.
-
-See docs/ICT_INTEGRATION_RECONCILIATION.md and docs/SPECIALIST_AGENT_CONTRACT.md.
+Position monitoring, position management, autonomous execution, MT5/broker connectivity, account/position access, order placement/cancellation, and live trading remain disabled. Forex backtesting, strategy lifecycle, and market-data modules still require selective porting and validation. See docs/FOREX_ICT_INTEGRATION_STATUS.md, docs/ICT_INTEGRATION_RECONCILIATION.md, and docs/SPECIALIST_AGENT_CONTRACT.md.
 
 ## Model configuration
 
