@@ -45,7 +45,7 @@ def evaluate_trades(trades: Sequence[TradeResult], initial_equity: float) -> Eva
         trade_count=len(pnls), wins=wins, losses=losses, breakeven=breakeven,
         win_rate=(wins / len(pnls)) if pnls else None,
         gross_profit=gross_profit, gross_loss=gross_loss,
-        profit_factor=(gross_profit / gross_loss) if gross_loss else (None if not gross_profit else float("inf")),
+        profit_factor=(gross_profit / gross_loss) if gross_loss else None,
         net_profit=sum(pnls),
         average_trade_pnl=(sum(pnls) / len(pnls)) if pnls else None,
         max_drawdown=max_drawdown, equity_curve=tuple(curve),
