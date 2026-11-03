@@ -303,7 +303,7 @@ def transition_strategy(
     strategy = store.get_strategy_version(strategy_id, version)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Strategy version not found")
-    history = store.list_strategy_transitions(strategy_id)
+    history = [item for item in store.list_strategy_transitions(strategy_id) if item["version"] == version]
     current_state = history[-1]["to_state"] if history else strategy["status"]
     decision = evaluate_transition(current_state, payload.target_state, payload.evidence)
     if not decision.allowed:
