@@ -2,7 +2,7 @@ import hmac
 import os
 from dataclasses import dataclass
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ def authenticate(authorization: str | None = Header(default=None)) -> Principal:
     raise HTTPException(status_code=403, detail="Invalid credentials")
 
 
-def require_admin(principal: Principal = __import__("fastapi").Depends(authenticate)) -> str:
+def require_admin(principal: Principal = Depends(authenticate)) -> str:
     if principal.role != "admin":
         raise HTTPException(status_code=403, detail="Administrator role required")
     return principal.subject
