@@ -74,3 +74,8 @@ pytest -q
 
 These documents describe target architecture and proposed contracts. They do not imply that the corresponding web client, backtesting engine, market-data pipeline, Demo connector, or execution services are already deployed.
 - [Web platform production-readiness gaps](docs/web-platform/IMPLEMENTATION_GAPS.md)
+
+
+## Local PostgreSQL profile
+
+Copy `.env.example` to a private `.env`, set strong unique `POSTGRES_PASSWORD`, and set `DATABASE_URL` to a SQLAlchemy URL targeting the Compose service, for example `postgresql+psycopg://nexus_app:<url-encoded-password>@postgres:5432/nexus`. Start with `docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build`. The container applies Alembic migrations before starting the API. Do not commit `.env`; keep the API bound to loopback until OIDC and deployment security are configured.
