@@ -1,11 +1,12 @@
 class AgentRegistry:
+    """Static capability catalog only; entries are not runtime registrations."""
     def __init__(self):
         self._agents = {
-            "research": {"name": "Research Agent", "status": "registered", "permissions": ["research.read"]},
-            "analysis": {"name": "Analysis Agent", "status": "registered", "permissions": ["analysis.run"]},
-            "developer": {"name": "Developer Agent", "status": "registered", "permissions": ["code.propose"]},
-            "executor": {"name": "Execution Agent", "status": "registered", "permissions": ["task.execute.low_risk"]},
-            "auditor": {"name": "Auditor Agent", "status": "registered", "permissions": ["audit.read"]},
+            "research": {"name": "Research Agent", "status": "catalog_only", "permissions": []},
+            "analysis": {"name": "Analysis Agent", "status": "catalog_only", "permissions": []},
+            "developer": {"name": "Developer Agent", "status": "catalog_only", "permissions": []},
+            "executor": {"name": "Execution Agent", "status": "disabled", "permissions": []},
+            "auditor": {"name": "Auditor Agent", "status": "catalog_only", "permissions": []},
         }
 
     def list_agents(self):
