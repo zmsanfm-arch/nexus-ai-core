@@ -117,3 +117,21 @@ def test_specialist_output_rejects_invalid_risk_decision_and_execution():
             answer="No",
             execution_result={"order_id": "123"},
         )
+
+
+
+def test_input_rejects_unconfirmed_user_rules_and_unprovenanced_sources():
+    with pytest.raises(ValidationError):
+        SpecialistInput(
+            task_id="task-2",
+            task_type="ict.strategy_formalization",
+            request="Formalize these rules",
+            user_rules=[{"rule_id": "R2", "text": "Risk 1%", "status": "inferred"}],
+        )
+    with pytest.raises(ValidationError):
+        SpecialistInput(
+            task_id="task-3",
+            task_type="ict.source_lookup",
+            request="Find a source",
+            retrieved_sources=[{"title": "Missing source identifiers"}],
+        )
