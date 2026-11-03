@@ -2,7 +2,16 @@
 
 NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP development.
 
-## Release 0.3.0
+## Release 0.4.0 — bounded multi-agent pipeline
+
+- Sequential Research, Analysis, and Auditor agents.
+- Strict JSON result contracts for every agent.
+- Per-agent invocation audit events.
+- Auditor verdict gates task completion: `pass` completes; `revise` or `block` blocks.
+- Agents have no external tools, filesystem access, credentials, or execution permissions.
+- Forex AI Agent integration is reserved as a future specialist subsystem behind a controlled API boundary.
+
+## Current platform foundation
 
 - FastAPI service and agent registry.
 - Deterministic risk classification and approval records.
@@ -45,8 +54,10 @@ Set `NEXUS_ADMIN_TOKEN` and `NEXUS_ADMIN_ID` only in the server-side secret mana
 
 ## Current limitations
 
-- Model adapter is synchronous and single-provider.
-- Bounded multi-agent planning, external tool execution, production identity, rate limits, and durable workflow orchestration are not implemented.
+- All three agents currently use the configured model adapter; independent model/provider routing is not implemented.
+- The Research Agent only reasons over supplied context; web research tools are not connected.
+- Agent execution is sequential and synchronous.
+- Forex connectivity, MT5 access, external tool execution, production identity, rate limits, and durable workflow orchestration are not implemented.
 - The service is not production-ready. Do not expose it publicly before deployment hardening and security review.
 
 ## Local development

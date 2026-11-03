@@ -1,14 +1,9 @@
+import json
 import uuid
 
 from app.services.risk import classify_risk
 from app.services.model_router import ModelNotConfigured, ModelProviderError
-
-
-SYSTEM_PROMPT = """You are the reasoning engine of NEXUS AI CORE.
-Analyze the user's objective and produce a concise, actionable response.
-Do not claim to have executed external actions or accessed tools.
-Never request or reveal credentials. Flag financial transfers, data disclosure,
-security changes, and irreversible actions as requiring separate authorization."""
+from app.services.agent_framework import AgentFramework, AgentContractError
 
 
 class Orchestrator:
@@ -17,6 +12,7 @@ class Orchestrator:
         self.governance = governance
         self.storage = storage
         self.model_router = model_router
+        self.agent_framework = AgentFramework(model_router, storage)
 
     def submit(self, objective: str):
         risk = classify_risk(objective)
@@ -24,7 +20,7 @@ class Orchestrator:
             "id": str(uuid.uuid4()),
             "objective": objective,
             "status": "running",
-            "assigned_agent": "analysis",
+            "assigned_agent": "multi_agent_pipeline",
             "risk_level": risk,
             "result": None,
         }
@@ -35,13 +31,14 @@ class Orchestrator:
             "risk_level": risk,
         })
         try:
-            result = self.model_router.generate(SYSTEM_PROMPT, objective)
-            task["status"] = "completed"
-            task["result"] = result
+            report = self.agent_framework.run(task["id"], objective)
+            verdict = report["audit"]["verdict"]
+            task["status"] = "completed" if verdict == "pass" else "blocked"
+            task["result"] = json.dumps(report, ensure_ascii=False)
         except ModelNotConfigured as exc:
             task["status"] = "blocked"
             task["result"] = str(exc)
-        except ModelProviderError as exc:
+        except (ModelProviderError, AgentContractError) as exc:
             task["status"] = "failed"
             task["result"] = str(exc)
         self.storage.save_task(task)
