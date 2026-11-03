@@ -59,6 +59,8 @@ class TradeResult:
     gross_pnl: float
     costs: float
     net_pnl: float
+    initial_risk: float = 0.0
+    r_multiple: float | None = None
 
 
 def _valid_intent(intent: TradeIntent) -> None:
@@ -160,5 +162,7 @@ def run_backtest(
             entry_fill=entry_fill, exit_fill=exit_fill, exit_reason=reason,
             quantity=intent.quantity, gross_pnl=gross,
             costs=total_costs, net_pnl=gross-total_costs,
+            initial_risk=abs(intent.entry_price - intent.stop_price) * intent.quantity,
+            r_multiple=(gross - total_costs) / (abs(intent.entry_price - intent.stop_price) * intent.quantity),
         ))
     return results
