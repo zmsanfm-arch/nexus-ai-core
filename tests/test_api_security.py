@@ -324,3 +324,41 @@ def test_oidc_authentication_fails_closed_without_role_group(monkeypatch):
         security.authenticate("Bearer signed-token")
     assert error.value.status_code == 403
     security._oidc_jwks_client.cache_clear()
+
+
+def test_historical_market_dataset_csv_import_and_read(client):
+    csv_text = (
+        "timestamp,open,high,low,close\n"
+        "2026-01-01T00:00:00Z,100,101,99,100\n"
+        "2026-01-01T00:05:00Z,100,102,99,101\n"
+    )
+    response = client.post(
+        "/market-data/datasets",
+        headers={"Authorization": "Bearer test-admin-token"},
+        data={"instrument": "XAUUSD", "timeframe": "M5", "expected_interval_seconds": "300"},
+        files={"file": ("xauusd.csv", csv_text, "text/csv")},
+    )
+    assert response.status_code == 200
+    dataset_id = response.json()["dataset_id"]
+    metadata = client.get(
+        f"/market-data/datasets/{dataset_id}",
+        headers={"Authorization": "Bearer test-api-token"},
+    )
+    assert metadata.status_code == 200
+    assert metadata.json()["row_count"] == 2
+    candles = client.get(
+        f"/market-data/datasets/{dataset_id}/candles?limit=1",
+        headers={"Authorization": "Bearer test-api-token"},
+    )
+    assert candles.status_code == 200
+    assert len(candles.json()["candles"]) == 1
+
+
+def test_market_dataset_import_is_admin_only(client):
+    response = client.post(
+        "/market-data/datasets",
+        headers={"Authorization": "Bearer test-api-token"},
+        data={"instrument": "XAUUSD", "timeframe": "M5"},
+        files={"file": ("xauusd.csv", "timestamp,open,high,low,close\n", "text/csv")},
+    )
+    assert response.status_code == 403
