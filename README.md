@@ -57,3 +57,15 @@ pip install pytest
 uvicorn app.main:app --reload
 pytest -q
 ```
+
+## Architecture specifications
+
+- [Strategy Research & Backtesting](docs/strategy-research/README.md)
+- [Strategy lifecycle and promotion gates](docs/strategy-research/STRATEGY_LIFECYCLE.md)
+- [NEXUS Web Platform](docs/web-platform/README.md)
+- [Dashboard information architecture](docs/web-platform/INFORMATION_ARCHITECTURE.md)
+- [Web platform security and access](docs/web-platform/SECURITY_AND_ACCESS.md)
+- [Web client API surface](docs/web-platform/API_SURFACE.md)
+- [Web platform delivery roadmap](docs/web-platform/DELIVERY_ROADMAP.md)
+
+These documents describe target architecture and proposed contracts. They do not imply that the corresponding web client, backtesting engine, market-data pipeline, Demo connector, or execution services are already deployed.
