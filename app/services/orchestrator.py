@@ -21,7 +21,7 @@ class Orchestrator:
         self.agent_framework = AgentFramework(model_router, storage)
         self.specialist_runtime = SpecialistRuntime(registry, storage)
 
-    def submit(self, objective: str, task_type: str | None = None, context=None):
+    def submit(self, objective: str, task_type: str | None = None, context=None, principal_id: str = "api-client"):
         risk = classify_risk(objective)
         task = {
             "id": str(uuid.uuid4()),
@@ -31,6 +31,7 @@ class Orchestrator:
             "assigned_agent": "multi_agent_pipeline" if task_type is None else None,
             "risk_level": risk,
             "result": None,
+            "principal_id": principal_id,
         }
         self.storage.save_task(task)
         self.storage.append_audit({
@@ -38,6 +39,7 @@ class Orchestrator:
             "task_id": task["id"],
             "risk_level": risk,
             "task_type": task_type,
+            "principal_id": principal_id,
         })
         try:
             if task_type is None:
@@ -70,5 +72,6 @@ class Orchestrator:
             "event": "task_finished",
             "task_id": task["id"],
             "status": task["status"],
+            "principal_id": principal_id,
         })
         return task
