@@ -29,7 +29,6 @@ class TaskQueueService:
             "principal_id": principal_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        self.storage.save_task(task)
         self.storage.enqueue_task(task)
         self.storage.append_audit({
             "event": "task_enqueued",
