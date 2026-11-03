@@ -140,7 +140,7 @@ def run_backtest(
                         exit_mid = min(intent.target_price, bar.open)
                 break
         if exit_bar is None:
-            continue
+            raise ValueError(f"Trade {intent.trade_id} remains open at the end of the dataset")
         if intent.direction == "long":
             exit_fill = exit_mid - half_spread - slip
             gross = (exit_mid - intent.entry_price) * intent.quantity
