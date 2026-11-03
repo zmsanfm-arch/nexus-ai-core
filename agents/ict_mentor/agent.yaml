@@ -1,0 +1,38 @@
+id: ict_mentor
+name: ICT Mentor
+version: 0.1.0
+status: specification
+domain: trading_education
+language:
+  primary: en
+  response_languages:
+    - fa
+    - en
+market_context:
+  initial_instrument: XAUUSD
+  platform_context: MT5
+  execution_mode: advisory_only
+knowledge:
+  retrieval_required: true
+  citations_required: true
+  source_policy: official_first
+capabilities:
+  - explain_ict_concepts
+  - retrieve_source_material
+  - analyze_user_supplied_charts
+  - formalize_user_strategy_rules
+  - critique_trade_scenarios
+permissions:
+  - research.read
+  - analysis.run
+  - knowledge.retrieve
+forbidden_capabilities:
+  - broker.connect
+  - order.place
+  - order.modify
+  - order.close
+  - risk_policy.modify
+governance:
+  deny_unapproved_actions: true
+  risk_engine_bypass: false
+  model_output_is_authorization: false
