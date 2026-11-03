@@ -1,4 +1,5 @@
 import hmac
+from dataclasses import asdict
 import os
 from urllib.parse import urlparse
 
@@ -11,6 +12,9 @@ from app.services.model_router import ModelRouter
 from app.storage import store
 from app.services.task_lifecycle import TaskQueueService
 from app.services.knowledge_store import KnowledgeStoreAdapter
+from app.schemas import BacktestRunCreate
+from app.backtesting.engine import Candle, TradeIntent, ExecutionCosts, BacktestConfig, run_backtest
+from app.backtesting.evaluator import evaluate_trades, evaluate_acceptance
 
 app = FastAPI(
     title="NEXUS AI CORE",
@@ -163,3 +167,63 @@ def search_knowledge(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"query": q, "results": results, "retrieval_mode": "lexical_baseline"}
+
+
+@app.post("/research/backtests/run")
+def run_research_backtest(
+    payload: BacktestRunCreate,
+    principal_id: str = Depends(require_api_access),
+):
+    candles = [
+        Candle(item.timestamp, item.open, item.high, item.low, item.close)
+        for item in payload.candles
+    ]
+    intents = [
+        TradeIntent(
+            trade_id=item.trade_id,
+            direction=item.direction,
+            signal_time=item.signal_time,
+            entry_time=item.entry_time,
+            entry_price=item.entry_price,
+            stop_price=item.stop_price,
+            target_price=item.target_price,
+            quantity=item.quantity,
+        )
+        for item in payload.intents
+    ]
+    costs = ExecutionCosts(**payload.costs.model_dump())
+    config = BacktestConfig(
+        same_bar_policy=payload.same_bar_policy,
+        costs=costs,
+    )
+    try:
+        trades = run_backtest(candles, intents, config)
+        evaluation = evaluate_trades(trades, payload.initial_equity)
+        acceptance = None
+        if payload.acceptance_criteria:
+            acceptance = evaluate_acceptance(evaluation, payload.acceptance_criteria)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    store.append_audit({
+        "event": "research_backtest_completed",
+        "principal_id": principal_id,
+        "trade_count": len(trades),
+        "net_profit": evaluation.net_profit,
+        "max_drawdown": evaluation.max_drawdown,
+        "acceptance_status": acceptance.status if acceptance else "not_evaluated",
+        "execution_mode": "research_only",
+    })
+    return {
+        "engine": "nexus_ohlc_research_v1",
+        "execution_mode": "research_only",
+        "broker_grade": False,
+        "trades": [asdict(item) for item in trades],
+        "evaluation": asdict(evaluation),
+        "acceptance": asdict(acceptance) if acceptance else None,
+        "limitations": [
+            "Uses midpoint OHLC candles and explicit trade intents.",
+            "Does not model broker-specific contract rules, liquidity, partial fills, swaps, or live execution.",
+            "A passing research gate is not trade authorization.",
+        ],
+    }
