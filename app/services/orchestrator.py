@@ -49,7 +49,8 @@ class Orchestrator:
                 specialist_input = SpecialistInput(
                     task_id=task["id"],
                     task_type=task_type,
-                    context={**(context or {}), "objective": objective},
+                    request=objective,
+                    context=context or {},
                 )
                 result = self.specialist_runtime.run(task_type, specialist_input)
                 task["assigned_agent"] = result.agent_id
