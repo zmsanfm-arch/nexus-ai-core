@@ -1,4 +1,7 @@
 import os
+import time
+import uuid
+from collections import defaultdict, deque
 import json
 from datetime import datetime
 from urllib.parse import urlparse
@@ -7,6 +10,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from fastapi import Depends, FastAPI, HTTPException
+from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -41,6 +45,47 @@ if allowed_origins:
     )
 
 
+
+_RATE_LIMIT_WINDOW = 60.0
+_RATE_LIMIT_MAX_REQUESTS = int(os.getenv("NEXUS_RATE_LIMIT_PER_MINUTE", "120"))
+_MAX_REQUEST_BYTES = int(os.getenv("NEXUS_MAX_REQUEST_BYTES", "1048576"))
+_REQUEST_TIMES = defaultdict(deque)
+
+
+class RequestGuardMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        request_id = str(uuid.uuid4())
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > _MAX_REQUEST_BYTES:
+                    response = JSONResponse({"detail": "Request body too large"}, status_code=413)
+                    response.headers["X-Request-ID"] = request_id
+                    return response
+            except ValueError:
+                response = JSONResponse({"detail": "Invalid Content-Length"}, status_code=400)
+                response.headers["X-Request-ID"] = request_id
+                return response
+
+        if request.url.path != "/health":
+            client_host = request.client.host if request.client else "unknown"
+            now = time.monotonic()
+            bucket = _REQUEST_TIMES[client_host]
+            while bucket and now - bucket[0] >= _RATE_LIMIT_WINDOW:
+                bucket.popleft()
+            if len(bucket) >= _RATE_LIMIT_MAX_REQUESTS:
+                response = JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+                response.headers["X-Request-ID"] = request_id
+                response.headers["Retry-After"] = "60"
+                return response
+            bucket.append(now)
+
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
@@ -53,6 +98,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestGuardMiddleware)
 
 registry = AgentRegistry()
 governance = GovernanceService(store)
