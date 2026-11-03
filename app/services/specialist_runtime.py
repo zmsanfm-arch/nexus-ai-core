@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.specialist_contract import SpecialistInput, SpecialistResult
+from app.services.permissions import PermissionDenied, PermissionService
 
 
 class SpecialistUnavailable(RuntimeError):
@@ -14,10 +15,11 @@ class SpecialistContractError(RuntimeError):
 class SpecialistRuntime:
     """Dispatches only enabled, explicitly injected specialists; never grants tools."""
 
-    def __init__(self, registry, storage, handlers=None):
+    def __init__(self, registry, storage, handlers=None, permission_service=None):
         self.registry = registry
         self.storage = storage
         self.handlers = dict(handlers or {})
+        self.permission_service = permission_service or PermissionService()
 
     def run(self, task_type: str, request: SpecialistInput) -> SpecialistResult:
         matches = self.registry.resolve_capability(task_type)
@@ -25,7 +27,19 @@ class SpecialistRuntime:
             raise SpecialistUnavailable(
                 f"No uniquely enabled specialist for capability: {task_type}"
             )
-        agent_id = matches[0]["id"]
+        agent = matches[0]
+        agent_id = agent["id"]
+        try:
+            granted_permission = self.permission_service.authorize(agent, task_type)
+        except PermissionDenied as exc:
+            self.storage.append_audit({
+                "event": "specialist_permission_denied",
+                "task_id": request.task_id,
+                "agent_id": agent_id,
+                "task_type": task_type,
+                "reason": str(exc),
+            })
+            raise SpecialistUnavailable(str(exc)) from exc
         handler = self.handlers.get(agent_id)
         if handler is None:
             raise SpecialistUnavailable(
@@ -36,6 +50,7 @@ class SpecialistRuntime:
             "task_id": request.task_id,
             "agent_id": agent_id,
             "task_type": task_type,
+            "permission": granted_permission,
         })
         try:
             result = handler.run(request)
