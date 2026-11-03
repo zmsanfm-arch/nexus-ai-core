@@ -98,5 +98,39 @@ class SQLAlchemyStore:
         self.engine.dispose()
 
 
-# Keep the storage interface stable while switching the default to durable storage.
+class InMemoryStore:
+    """Test-only ephemeral store; the application uses SQLAlchemyStore."""
+    def __init__(self):
+        self.tasks = {}
+        self.approvals = {}
+        self.audit = []
+        self._lock = RLock()
+
+    def save_task(self, task):
+        with self._lock:
+            self.tasks[task["id"]] = dict(task)
+
+    def get_task(self, task_id):
+        with self._lock:
+            item = self.tasks.get(task_id)
+            return dict(item) if item else None
+
+    def save_approval(self, approval):
+        with self._lock:
+            self.approvals[approval["id"]] = dict(approval)
+
+    def get_approval(self, approval_id):
+        with self._lock:
+            item = self.approvals.get(approval_id)
+            return dict(item) if item else None
+
+    def append_audit(self, event):
+        with self._lock:
+            self.audit.append({
+                **event,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+
+# Application default: durable SQL storage. InMemoryStore remains test-only.
 store = SQLAlchemyStore()
