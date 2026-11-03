@@ -86,3 +86,24 @@ def test_authentication_fails_closed_when_unconfigured(monkeypatch):
     monkeypatch.delenv("NEXUS_ADMIN_ID", raising=False)
     response = TestClient(app).get("/agents")
     assert response.status_code == 503
+
+
+def test_duplicate_admin_and_operator_tokens_fail_closed(monkeypatch):
+    monkeypatch.setenv("NEXUS_ADMIN_TOKEN", "same-token")
+    monkeypatch.setenv("NEXUS_ADMIN_ID", "verified-admin")
+    monkeypatch.setenv("NEXUS_API_TOKEN", "same-token")
+    monkeypatch.setenv("NEXUS_API_ID", "verified-operator")
+    response = TestClient(app).get(
+        "/agents", headers={"Authorization": "Bearer same-token"}
+    )
+    assert response.status_code == 503
+
+
+def test_configured_admin_token_requires_identity(monkeypatch):
+    monkeypatch.setenv("NEXUS_ADMIN_TOKEN", "admin-token")
+    monkeypatch.delenv("NEXUS_ADMIN_ID", raising=False)
+    monkeypatch.delenv("NEXUS_API_TOKEN", raising=False)
+    response = TestClient(app).get(
+        "/agents", headers={"Authorization": "Bearer admin-token"}
+    )
+    assert response.status_code == 503
