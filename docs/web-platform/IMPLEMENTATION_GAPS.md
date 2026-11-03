@@ -93,3 +93,9 @@ Remaining persistence work: replace generic JSON payload records with fully norm
 - Full portfolio-level backtesting, walk-forward orchestration, out-of-sample evidence and production evaluator persistence are incomplete.
 - MT5 Demo bridge, broker account reconciliation, central Risk Engine, Execution Gateway and operational kill switch do not exist yet. Live remains disabled.
 - A Next.js mobile console and hosting/deployment have not been built. They must follow production identity and API hardening; no public endpoint should be exposed meanwhile.
+
+
+## Historical market-data ingestion update
+
+- Admins can import timezone-aware OHLC CSV files through the central API (5 MiB per upload). The import validates OHLC ranges, rejects duplicate timestamps, normalizes ordering, optionally counts missing intervals, computes SHA-256 and persists an immutable dataset record.
+- Authenticated users can read dataset metadata and paginated candles. The import does not establish vendor provenance or prove that the data represents a particular broker's executable bid/ask prices. Dataset provenance, broker specification, spread history, and completeness must be reviewed before any backtest acceptance.
