@@ -15,7 +15,7 @@ def test_manifest_permission_cannot_override_core_denylist():
     agent = {
         "id": "ict_mentor",
         "mode": "advisory",
-        "permissions": ["ict.advisory.education"],
+        "permissions": ["user_input.read"],
     }
     with pytest.raises(PermissionDenied, match="not allowed"):
         service.authorize(agent, "ict.education")
@@ -33,9 +33,9 @@ def test_authorized_advisory_capability_requires_both_sides_to_allow():
     agent = {
         "id": "ict_mentor",
         "mode": "advisory",
-        "permissions": ["ict.advisory.chart_analysis"],
+        "permissions": ["chart_attachment.read"],
     }
-    assert service.authorize(agent, "ict.chart_analysis") == "ict.advisory.chart_analysis"
+    assert service.authorize(agent, "ict.chart_analysis") == "chart_attachment.read"
 
 
 def test_non_advisory_mode_is_denied():
@@ -43,7 +43,22 @@ def test_non_advisory_mode_is_denied():
     agent = {
         "id": "ict_mentor",
         "mode": "execution",
-        "permissions": ["ict.advisory.education"],
+        "permissions": ["user_input.read"],
     }
     with pytest.raises(PermissionDenied, match="Only advisory"):
         service.authorize(agent, "ict.education")
+
+
+
+def test_forex_permission_requests_are_not_implicit_grants():
+    from app.services.registry import AgentRegistry
+
+    agent = AgentRegistry().get("ict_mentor")
+    assert agent["requested_permissions"] == [
+        "knowledge.retrieve",
+        "user_input.read",
+        "chart_attachment.read",
+    ]
+    assert agent["permissions"] == []
+    with pytest.raises(PermissionDenied, match="not been granted"):
+        PermissionService().authorize(agent, "ict.chart_analysis")
