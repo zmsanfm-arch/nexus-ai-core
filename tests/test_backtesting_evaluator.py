@@ -69,3 +69,25 @@ def test_acceptance_fails_if_any_declared_threshold_is_missed():
     )
     assert decision.status == "fail"
     assert "minimum_trades" in decision.failed
+
+
+def test_evaluator_computes_expectancy_r_from_trade_ledger():
+    from dataclasses import replace
+
+    first = replace(trade("r1", 10, 1), initial_risk=5, r_multiple=2.0)
+    second = replace(trade("r2", -5, 2), initial_risk=5, r_multiple=-1.0)
+    result = evaluate_trades([first, second], 100)
+    assert result.expectancy_r == 0.5
+    assert result.average_r == 0.5
+    decision = evaluate_acceptance(
+        result,
+        {
+            "minimum_trades": 2,
+            "minimum_profit_factor": 1,
+            "maximum_drawdown": 0.1,
+            "minimum_expectancy_r": 0.4,
+            "robustness_required": False,
+            "criteria_owner": "research_default",
+        },
+    )
+    assert decision.status == "pass"
