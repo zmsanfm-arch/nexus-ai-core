@@ -84,3 +84,10 @@ Never represent unavailable service data as valid zero values. Include field-lev
 | POST | `/research/experiments` | admin | implemented; validates the Experiment Plan schema and stores immutable plans |
 
 These endpoints register research artifacts only. They do not start backtests, approve strategies, enable Demo execution or expose Live operations. The strategy and experiment APIs currently lack list/search pagination and artifact upload/download endpoints.
+
+
+| Method | Route | Access | State |
+|---|---|---|---|
+| POST | `/knowledge/sources` | admin | implemented; provenance-aware, immutable source ingestion |
+| GET | `/knowledge/search?q=...` | authenticated | implemented; lexical retrieval baseline with source and segment metadata |
+| POST | `/agents/ict-mentor/invoke` | authenticated | implemented; central advisory invocation with schema and provenance checks; execution disabled |
