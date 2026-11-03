@@ -81,6 +81,18 @@ class KnowledgeChunkRecord(Base):
     timestamp_end: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class MarketDatasetRecord(Base):
+    __tablename__ = "market_datasets"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    instrument: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    timeframe: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    quality: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    candles: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
     def __init__(self, database_url: str | None = None):
@@ -210,6 +222,29 @@ class SQLAlchemyStore:
                 if record.record_type != record_type or record.environment != environment:
                     raise ValueError("Trading record identity and environment are immutable")
                 record.data = dict(data)
+
+    def save_market_dataset(self, dataset: dict):
+        with self._lock, self.sessions.begin() as session:
+            if session.get(MarketDatasetRecord, dataset["id"]) is not None:
+                raise ValueError("Market dataset IDs are immutable")
+            session.add(MarketDatasetRecord(
+                id=dataset["id"], instrument=dataset["instrument"],
+                timeframe=dataset["timeframe"], content_sha256=dataset["content_sha256"],
+                row_count=dataset["row_count"], quality=dict(dataset["quality"]),
+                candles=list(dataset["candles"]), created_at=dataset["created_at"],
+            ))
+
+    def get_market_dataset(self, dataset_id: str):
+        with self.sessions() as session:
+            record = session.get(MarketDatasetRecord, dataset_id)
+            if record is None:
+                return None
+            return {
+                "id": record.id, "instrument": record.instrument,
+                "timeframe": record.timeframe, "content_sha256": record.content_sha256,
+                "row_count": record.row_count, "quality": dict(record.quality),
+                "candles": list(record.candles), "created_at": record.created_at.isoformat(),
+            }
 
     def save_knowledge_source(self, source: dict, chunks: list[dict]):
         """Persist provenance and bounded text segments for authorized source material."""
