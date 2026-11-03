@@ -50,3 +50,59 @@ def evaluate_trades(trades: Sequence[TradeResult], initial_equity: float) -> Eva
         average_trade_pnl=(sum(pnls) / len(pnls)) if pnls else None,
         max_drawdown=max_drawdown, equity_curve=tuple(curve),
     )
+
+
+@dataclass(frozen=True)
+class AcceptanceDecision:
+    status: str
+    criteria_owner: str
+    passed: tuple[str, ...]
+    failed: tuple[str, ...]
+    unevaluable: tuple[str, ...]
+
+
+def evaluate_acceptance(
+    evaluation: Evaluation,
+    criteria: dict,
+    *,
+    expectancy_r: float | None = None,
+    robustness_passed: bool | None = None,
+) -> AcceptanceDecision:
+    """Evaluate predeclared gates; missing evidence blocks rather than passes."""
+    owner = criteria.get("criteria_owner", "research_default")
+    if owner not in {"user", "central_policy", "research_default"}:
+        raise ValueError("Unknown acceptance criteria owner")
+    passed, failed, unevaluable = [], [], []
+
+    checks = [
+        ("minimum_trades", evaluation.trade_count, lambda actual, limit: actual >= limit),
+        ("minimum_profit_factor", evaluation.profit_factor, lambda actual, limit: actual is not None and actual >= limit),
+        ("maximum_drawdown", evaluation.max_drawdown, lambda actual, limit: actual <= limit),
+    ]
+    for name, actual, predicate in checks:
+        limit = criteria.get(name)
+        if limit is None or actual is None:
+            unevaluable.append(name)
+        elif predicate(actual, limit):
+            passed.append(name)
+        else:
+            failed.append(name)
+
+    min_expectancy = criteria.get("minimum_expectancy_r")
+    if min_expectancy is None or expectancy_r is None:
+        unevaluable.append("minimum_expectancy_r")
+    elif expectancy_r >= min_expectancy:
+        passed.append("minimum_expectancy_r")
+    else:
+        failed.append("minimum_expectancy_r")
+
+    if criteria.get("robustness_required", False):
+        if robustness_passed is None:
+            unevaluable.append("robustness_required")
+        elif robustness_passed:
+            passed.append("robustness_required")
+        else:
+            failed.append("robustness_required")
+
+    status = "fail" if failed else ("blocked" if unevaluable else "pass")
+    return AcceptanceDecision(status, owner, tuple(passed), tuple(failed), tuple(unevaluable))
