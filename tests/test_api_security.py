@@ -6,6 +6,7 @@ from app.main import app, governance, store
 
 @pytest.fixture
 def client(monkeypatch):
+    monkeypatch.setenv("NEXUS_AUTH_MODE", "static")
     monkeypatch.setenv("NEXUS_ADMIN_TOKEN", "test-admin-token")
     monkeypatch.setenv("NEXUS_ADMIN_ID", "verified-admin")
     monkeypatch.setenv("NEXUS_API_TOKEN", "test-api-token")
@@ -259,3 +260,67 @@ def test_strategy_lifecycle_api_blocks_missing_evidence_and_records_transition(c
     )
     assert history.status_code == 200
     assert history.json()["current_state"] == "candidate"
+
+
+def test_oidc_authentication_maps_verified_groups_to_admin(monkeypatch):
+    import app.security as security
+
+    class SigningKey:
+        key = "verified-public-key"
+
+    class FakeJwks:
+        def get_signing_key_from_jwt(self, token):
+            assert token == "signed-token"
+            return SigningKey()
+
+    monkeypatch.setenv("NEXUS_AUTH_MODE", "oidc")
+    monkeypatch.setenv("NEXUS_OIDC_ISSUER", "https://identity.example")
+    monkeypatch.setenv("NEXUS_OIDC_AUDIENCE", "nexus-api")
+    monkeypatch.setenv("NEXUS_OIDC_JWKS_URL", "https://identity.example/.well-known/jwks.json")
+    monkeypatch.setenv("NEXUS_OIDC_ADMIN_GROUP", "nexus-admins")
+    monkeypatch.setenv("NEXUS_OIDC_OPERATOR_GROUP", "nexus-operators")
+    monkeypatch.setattr(security.jwt, "PyJWKClient", lambda *args, **kwargs: FakeJwks())
+    monkeypatch.setattr(
+        security.jwt, "decode",
+        lambda *args, **kwargs: {
+            "sub": "oidc-user-1", "iss": "https://identity.example",
+            "aud": "nexus-api", "groups": ["nexus-admins"],
+        },
+    )
+    security._oidc_jwks_client.cache_clear()
+    principal = security.authenticate("Bearer signed-token")
+    assert principal.subject == "oidc-user-1"
+    assert principal.role == "admin"
+    security._oidc_jwks_client.cache_clear()
+
+
+def test_oidc_authentication_fails_closed_without_role_group(monkeypatch):
+    import app.security as security
+
+    class SigningKey:
+        key = "verified-public-key"
+
+    class FakeJwks:
+        def get_signing_key_from_jwt(self, token):
+            return SigningKey()
+
+    monkeypatch.setenv("NEXUS_AUTH_MODE", "oidc")
+    monkeypatch.setenv("NEXUS_OIDC_ISSUER", "https://identity.example")
+    monkeypatch.setenv("NEXUS_OIDC_AUDIENCE", "nexus-api")
+    monkeypatch.setenv("NEXUS_OIDC_JWKS_URL", "https://identity.example/.well-known/jwks.json")
+    monkeypatch.setenv("NEXUS_OIDC_ADMIN_GROUP", "nexus-admins")
+    monkeypatch.setenv("NEXUS_OIDC_OPERATOR_GROUP", "nexus-operators")
+    monkeypatch.setattr(security.jwt, "PyJWKClient", lambda *args, **kwargs: FakeJwks())
+    monkeypatch.setattr(
+        security.jwt, "decode",
+        lambda *args, **kwargs: {
+            "sub": "unknown-user", "iss": "https://identity.example",
+            "aud": "nexus-api", "groups": ["other"],
+        },
+    )
+    security._oidc_jwks_client.cache_clear()
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as error:
+        security.authenticate("Bearer signed-token")
+    assert error.value.status_code == 403
+    security._oidc_jwks_client.cache_clear()
