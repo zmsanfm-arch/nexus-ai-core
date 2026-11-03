@@ -53,3 +53,27 @@ def test_research_and_demo_records_are_environment_scoped(tmp_path):
     with pytest.raises(ValueError, match="Live trading persistence is disabled"):
         store.save_trading_record("order", "order-live-1", "live", {"side": "buy"})
     store.close()
+
+
+def test_knowledge_sources_are_provenance_preserving_and_immutable(tmp_path):
+    from datetime import datetime, timezone
+    import pytest
+
+    store = SQLAlchemyStore(f"sqlite:///{tmp_path / 'knowledge.db'}")
+    source = {
+        "id": "source-1",
+        "title": "Public source",
+        "url": "https://example.org/ict",
+        "source_type": "web",
+        "usage_basis": "official_public_excerpt",
+        "retrieved_at": datetime(2026, 11, 4, tzinfo=timezone.utc),
+        "metadata": {"publisher": "official"},
+    }
+    chunks = [{"ordinal": 0, "text": "Liquidity sweep and displacement"}]
+    store.save_knowledge_source(source, chunks)
+    results = store.search_knowledge("liquidity displacement")
+    assert results[0]["segment_id"] == "source-1:0"
+    assert results[0]["url"] == source["url"]
+    with pytest.raises(ValueError, match="immutable"):
+        store.save_knowledge_source(source, chunks)
+    store.close()
