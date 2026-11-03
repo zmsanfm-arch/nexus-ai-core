@@ -1,15 +1,15 @@
 import json
 import unittest
 from pathlib import Path
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[1]
 
 class ICTContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.input_validator = Draft202012Validator(json.loads((ROOT / "schemas/input.schema.json").read_text()))
-        cls.output_validator = Draft202012Validator(json.loads((ROOT / "schemas/output.schema.json").read_text()))
+        cls.input_validator = Draft202012Validator(json.loads((ROOT / "schemas/input.schema.json").read_text()), format_checker=FormatChecker())
+        cls.output_validator = Draft202012Validator(json.loads((ROOT / "schemas/output.schema.json").read_text()), format_checker=FormatChecker())
         cls.examples = json.loads((ROOT / "examples/contract_examples.json").read_text())
 
     def test_example_inputs(self):
