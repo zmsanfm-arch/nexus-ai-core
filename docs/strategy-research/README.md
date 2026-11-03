@@ -66,3 +66,6 @@ This release is specification-only. It does not implement a data feed, simulator
 - `app/backtesting/engine.py`: deterministic one-intent-at-a-time OHLC simulator with explicit spread, slippage, commission, gap-through-stop handling and configurable same-bar stop/target policy.
 - `app/backtesting/evaluator.py`: ledger-derived win rate, profit factor, net PnL, average trade PnL, equity curve and max drawdown.
 - These modules do not generate ICT signals, select entries or represent a broker feed. A strategy-specific signal adapter, bid/ask historical datasets, swap/financing, partial fills, portfolio concurrency and full walk-forward orchestration remain future work. The current simulator must not be treated as a complete production-grade backtester.
+
+
+The evaluator now derives expectancy-R and average-R from each trade's net PnL divided by initial stop-distance risk. Until broker contract size, tick value, account currency conversion and lot specifications are loaded, this is a price-distance/quantity R proxy, not a verified account-currency risk measure. Do not use it to authorize execution sizing.
