@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 
-# This policy is owned by NEXUS CORE. A manifest cannot expand this allowlist.
+# Core-owned permissions. Forex-side declarations are requests only; this
+# allowlist is the independent authorization boundary.
 CAPABILITY_PERMISSIONS = {
-    "ict.education": "ict.advisory.education",
-    "ict.source_lookup": "ict.advisory.source_lookup",
-    "ict.chart_analysis": "ict.advisory.chart_analysis",
-    "ict.strategy_formalization": "ict.advisory.strategy_formalization",
-    "ict.trade_review": "ict.advisory.trade_review",
+    "ict.education": "user_input.read",
+    "ict.source_lookup": "knowledge.retrieve",
+    "ict.chart_analysis": "chart_attachment.read",
+    "ict.strategy_formalization": "user_input.read",
+    "ict.trade_review": "user_input.read",
 }
 
 CORE_ALLOWED_PERMISSIONS = frozenset(CAPABILITY_PERMISSIONS.values())
@@ -20,7 +21,7 @@ class PermissionDenied(RuntimeError):
 
 
 class PermissionService:
-    """Deterministic allowlist gate; manifest declarations alone never grant access."""
+    """A manifest grant and central allowlist are both required."""
 
     def __init__(
         self,
