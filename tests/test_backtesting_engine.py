@@ -26,6 +26,8 @@ def test_long_trade_uses_explicit_costs_and_stop_fill():
     assert result.exit_fill == pytest.approx(97.8)
     assert result.costs == pytest.approx(0.5)
     assert result.net_pnl == pytest.approx(-2.5)
+    assert result.initial_risk == pytest.approx(2.0)
+    assert result.r_multiple == pytest.approx(-1.25)
 
 
 def test_same_bar_ambiguity_can_be_rejected():
