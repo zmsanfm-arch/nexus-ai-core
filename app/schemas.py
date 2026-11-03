@@ -1,8 +1,15 @@
-from pydantic import BaseModel, Field
-from typing import Literal, Optional
+from typing import Optional
 
-class TaskCreate(BaseModel):
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class StrictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class TaskCreate(StrictRequest):
     objective: str = Field(min_length=5, max_length=4000)
+
 
 class TaskView(BaseModel):
     id: str
@@ -12,6 +19,6 @@ class TaskView(BaseModel):
     risk_level: str
     result: Optional[str] = None
 
-class ApprovalDecision(BaseModel):
+
+class ApprovalDecision(StrictRequest):
     approved: bool
-    reviewer: str = Field(min_length=2, max_length=120)

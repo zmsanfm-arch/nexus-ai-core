@@ -1,41 +1,55 @@
-# NEXUS AI CORE — MVP Scaffold
+# NEXUS AI CORE
 
-Version: 0.1.0  
-Status: executable foundation scaffold; not production-hardened.
+NEXUS AI CORE is the foundation for a cloud-based, multi-agent system. The current release is an **MVP scaffold**, not a production autonomous agent.
 
-## Requirements
-- Docker + Docker Compose, or Python 3.11+
-- An OpenAI-compatible model endpoint (optional for the first local API test)
+## Current capabilities
 
-## Run with Docker
-1. Copy `.env.example` to `.env`.
-2. Run: `docker compose up --build`
-3. Open `http://localhost:8000/docs`
-4. Health check: `http://localhost:8000/health`
+- FastAPI service with health, agent registry, task submission and task lookup endpoints.
+- Deterministic risk classification and governance approval records.
+- Explicit approval gate for sensitive action categories.
+- Bearer-token protection for approval decisions.
+- GitHub Actions test workflow.
 
-## Run locally
+## Important limitations
+
+- Task orchestration is currently a placeholder. No LLM provider or autonomous agent execution is connected yet.
+- Storage is in-memory and is lost when the process restarts. PostgreSQL is required before multi-instance or production use.
+- The approval endpoint fails closed unless both administrator settings are configured.
+- The administrator bearer token is a bootstrap control, not a replacement for a production identity provider, MFA, key rotation, or role-based access control.
+- Do not expose this service publicly until authentication, persistent storage, rate limiting, audit durability, and deployment hardening are complete.
+
+## Local development
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
+pip install pytest
 uvicorn app.main:app --reload
+pytest -q
 ```
 
-## Initial endpoints
+## Approval administration
+
+Set these server-side environment variables only in the deployment secret manager:
+
+- `NEXUS_ADMIN_TOKEN`: high-entropy administrator bearer token.
+- `NEXUS_ADMIN_ID`: stable identity recorded in the audit trail for the administrator holding that token.
+
+Never commit real credentials to Git. The API does not accept a reviewer identity from the request body.
+
+## API
+
 - `GET /health`
 - `GET /agents`
 - `POST /tasks`
 - `GET /tasks/{task_id}`
-- `POST /approvals/{approval_id}/decision`
+- `POST /approvals/{approval_id}/decision` (administrator bearer token required)
 
-## Security design
-- The model/agent layer cannot grant itself permissions.
-- Sensitive operations are denied unless an independent approval record exists.
-- This scaffold demonstrates policy boundaries; production identity, durable audit storage,
-  secret management, network isolation, and cryptographic approval signing remain required.
-- Never expose model API keys in prompts, logs, or client-side code.
+## Next engineering milestones
 
-## Current limitations
-This is a starter repository, not a deployed cloud system. No cloud account, DNS, credentials,
-or production secrets are included. Do not connect it to real financial accounts or allow
-irreversible operations until security review and penetration testing are complete.
+1. Replace in-memory storage with PostgreSQL and durable audit records.
+2. Add a provider adapter and connect the first LLM through server-side secrets.
+3. Implement bounded agent execution, tool permissions, timeouts and retry policies.
+4. Add independent policy enforcement and deployment identity management.
+5. Add integration tests and deploy to a low-cost environment only after security gates pass.

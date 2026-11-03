@@ -1,29 +1,55 @@
-from fastapi import FastAPI, HTTPException
+import hmac
+import os
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from app.schemas import TaskCreate, TaskView, ApprovalDecision
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.storage import store
 
-app = FastAPI(title="NEXUS AI CORE", version="0.1.0",
-              description="Autonomous multi-agent system foundation")
+app = FastAPI(
+    title="NEXUS AI CORE",
+    version="0.1.1",
+    description="Autonomous multi-agent system foundation",
+)
 
 registry = AgentRegistry()
 governance = GovernanceService(store)
 orchestrator = Orchestrator(registry, governance, store)
 
+
+def require_admin(authorization: str | None = Header(default=None)) -> str:
+    """Require a server-configured bearer token; never trust a client-supplied reviewer."""
+    expected_token = os.getenv("NEXUS_ADMIN_TOKEN")
+    reviewer_id = os.getenv("NEXUS_ADMIN_ID")
+    if not expected_token or not reviewer_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Approval administration is not configured on this deployment",
+        )
+    scheme, _, supplied_token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied_token:
+        raise HTTPException(status_code=401, detail="Bearer authentication required")
+    if not hmac.compare_digest(supplied_token, expected_token):
+        raise HTTPException(status_code=403, detail="Invalid administrator credentials")
+    return reviewer_id
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "nexus-ai-core", "version": "0.1.0"}
+    return {"status": "ok", "service": "nexus-ai-core", "version": "0.1.1"}
+
 
 @app.get("/agents")
 def list_agents():
     return {"agents": registry.list_agents()}
 
+
 @app.post("/tasks", response_model=TaskView)
 def create_task(payload: TaskCreate):
-    task = orchestrator.submit(payload.objective)
-    return task
+    return orchestrator.submit(payload.objective)
+
 
 @app.get("/tasks/{task_id}", response_model=TaskView)
 def get_task(task_id: str):
@@ -32,12 +58,16 @@ def get_task(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
+
 @app.post("/approvals/{approval_id}/decision")
-def decide_approval(approval_id: str, payload: ApprovalDecision):
-    # Authentication is intentionally not mocked. This endpoint must be protected
-    # by a real identity provider before deployment outside a local sandbox.
+def decide_approval(
+    approval_id: str,
+    payload: ApprovalDecision,
+    reviewer_id: str = Depends(require_admin),
+):
     try:
-        result = governance.decide(approval_id, payload.approved, payload.reviewer)
+        return governance.decide(approval_id, payload.approved, reviewer_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Approval not found")
-    return result
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
