@@ -1,6 +1,9 @@
 import os
 import time
 import uuid
+import hashlib
+import tempfile
+from dataclasses import asdict
 import uuid
 from collections import defaultdict, deque
 import json
@@ -10,7 +13,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form
 from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -22,6 +25,7 @@ from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.agents.ict_mentor import ICTMentorRuntime
 from app.services.strategy_lifecycle import evaluate_transition
+from app.market_data.csv_loader import load_ohlc_csv
 from app.security import authenticate, require_admin
 from app.storage import store
 
@@ -350,3 +354,84 @@ def get_strategy_transitions(strategy_id: str, version: str):
     history = [item for item in store.list_strategy_transitions(strategy_id) if item["version"] == version]
     current_state = history[-1]["to_state"] if history else strategy["status"]
     return {"strategy_id": strategy_id, "version": version, "current_state": current_state, "history": history}
+
+
+@app.post("/market-data/datasets")
+async def import_market_dataset(
+    file: UploadFile = File(...),
+    instrument: str = Form(..., min_length=3, max_length=64),
+    timeframe: str = Form(..., pattern="^(M1|M5|M15|M30|H1|H4|D1)$"),
+    expected_interval_seconds: int | None = Form(default=None, ge=1, le=86400),
+    reviewer_id: str = Depends(require_admin),
+):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Only CSV market-data files are accepted")
+    raw = await file.read(5 * 1024 * 1024 + 1)
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Market-data CSV exceeds the 5 MiB import limit")
+    try:
+        text_data = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail="CSV must be UTF-8 encoded") from exc
+    if not text_data.strip():
+        raise HTTPException(status_code=422, detail="CSV is empty")
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", encoding="utf-8", newline="") as temp:
+        temp.write(text_data)
+        temp.flush()
+        try:
+            dataset = load_ohlc_csv(
+                temp.name,
+                expected_interval=(
+                    __import__("datetime").timedelta(seconds=expected_interval_seconds)
+                    if expected_interval_seconds else None
+                ),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    dataset_id = str(uuid.uuid4())
+    candles = [{
+        "timestamp": candle.timestamp.isoformat(),
+        "open": candle.open, "high": candle.high,
+        "low": candle.low, "close": candle.close,
+    } for candle in dataset.candles]
+    quality = asdict(dataset.quality)
+    store.save_market_dataset({
+        "id": dataset_id, "instrument": instrument.upper(),
+        "timeframe": timeframe, "content_sha256": hashlib.sha256(raw).hexdigest(),
+        "row_count": len(candles), "quality": quality, "candles": candles,
+        "created_at": datetime.now().astimezone(),
+    })
+    store.append_audit({
+        "event": "market_dataset_imported", "dataset_id": dataset_id,
+        "instrument": instrument.upper(), "timeframe": timeframe,
+        "row_count": len(candles), "actor": reviewer_id,
+    })
+    return {
+        "dataset_id": dataset_id, "instrument": instrument.upper(),
+        "timeframe": timeframe, "row_count": len(candles),
+        "content_sha256": hashlib.sha256(raw).hexdigest(), "quality": quality,
+    }
+
+
+@app.get("/market-data/datasets/{dataset_id}", dependencies=[Depends(authenticate)])
+def get_market_dataset(dataset_id: str):
+    dataset = store.get_market_dataset(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Market dataset not found")
+    return {key: value for key, value in dataset.items() if key != "candles"}
+
+
+@app.get("/market-data/datasets/{dataset_id}/candles", dependencies=[Depends(authenticate)])
+def get_market_dataset_candles(dataset_id: str, offset: int = 0, limit: int = 1000):
+    if offset < 0 or limit < 1 or limit > 5000:
+        raise HTTPException(status_code=422, detail="Invalid pagination")
+    dataset = store.get_market_dataset(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Market dataset not found")
+    return {
+        "dataset_id": dataset_id, "offset": offset, "limit": limit,
+        "total": dataset["row_count"],
+        "candles": dataset["candles"][offset:offset + limit],
+    }
