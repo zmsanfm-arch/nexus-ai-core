@@ -32,13 +32,19 @@ def test_specialist_result_rejects_execution_payload():
             agent_id="ict_mentor",
             mode="advisory",
             answer="Analysis only",
+            source_claims=[],
+            user_rules_used=[],
+            agent_inferences=[],
+            proposed_actions=[],
+            risk_decision="not_assessed_by_specialist",
             execution_result={"order_id": "123"},
+            uncertainties=[],
         )
 
 
 def test_specialist_input_rejects_extra_fields():
     with pytest.raises(ValidationError):
-        SpecialistInput(task_id="t1", task_type="ict.education", context={}, tools=["mt5"])
+        SpecialistInput(task_id="t1", task_type="ict.education", request="Test", context={}, tools=["mt5"])
 
 
 
@@ -50,6 +56,7 @@ def test_specialist_input_rejects_context_over_16_kib():
         SpecialistInput(
             task_id="task-large",
             task_type="ict.education",
+            request="Test",
             context={"payload": "x" * 17_000},
         )
 
@@ -114,8 +121,15 @@ def test_specialist_output_rejects_invalid_risk_decision_and_execution():
     with pytest.raises(ValidationError):
         SpecialistResult(
             agent_id="ict_mentor",
+            mode="advisory",
             answer="No",
+            source_claims=[],
+            user_rules_used=[],
+            agent_inferences=[],
+            proposed_actions=[],
+            risk_decision="not_assessed_by_specialist",
             execution_result={"order_id": "123"},
+            uncertainties=[],
         )
 
 
