@@ -39,3 +39,16 @@ def test_specialist_result_rejects_execution_payload():
 def test_specialist_input_rejects_extra_fields():
     with pytest.raises(ValidationError):
         SpecialistInput(task_id="t1", task_type="ict.education", context={}, tools=["mt5"])
+
+
+
+def test_specialist_input_rejects_context_over_16_kib():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="16 KiB"):
+        SpecialistInput(
+            task_id="task-large",
+            task_type="ict.education",
+            context={"payload": "x" * 17_000},
+        )
