@@ -8,6 +8,7 @@ from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.storage import store
+from app.services.task_lifecycle import TaskQueueService
 
 app = FastAPI(
     title="NEXUS AI CORE",
@@ -19,6 +20,7 @@ registry = AgentRegistry()
 governance = GovernanceService(store)
 model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
+task_queue = TaskQueueService(store)
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
