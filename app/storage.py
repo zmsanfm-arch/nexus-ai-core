@@ -34,6 +34,32 @@ class AuditRecord(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class StrategyVersionRecord(Base):
+    __tablename__ = "strategy_versions"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    strategy_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ResearchRecord(Base):
+    __tablename__ = "research_records"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    record_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TradingRecord(Base):
+    __tablename__ = "trading_records"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    record_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
     def __init__(self, database_url: str | None = None):
@@ -95,6 +121,62 @@ class SQLAlchemyStore:
                 {**record.data, "recorded_at": record.recorded_at.isoformat()}
                 for record in reversed(records)
             ]
+
+    def create_strategy_version(self, strategy_id: str, version: str, data: dict):
+        """Insert-only strategy version storage; existing versions are immutable."""
+        key = f"{strategy_id}:{version}"
+        with self._lock, self.sessions.begin() as session:
+            if session.get(StrategyVersionRecord, key) is not None:
+                raise ValueError("Strategy version already exists and is immutable")
+            session.add(StrategyVersionRecord(
+                id=key, strategy_id=strategy_id, version=version,
+                data=dict(data), created_at=datetime.now(timezone.utc),
+            ))
+        return key
+
+    def get_strategy_version(self, strategy_id: str, version: str):
+        with self.sessions() as session:
+            record = session.get(StrategyVersionRecord, f"{strategy_id}:{version}")
+            return dict(record.data) if record else None
+
+    def save_research_record(self, record_type: str, record_id: str, data: dict):
+        if record_type not in {"experiment", "backtest_run", "backtest_trade", "evaluator_result"}:
+            raise ValueError("Unsupported research record type")
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(ResearchRecord, record_id)
+            if record is None:
+                session.add(ResearchRecord(
+                    id=record_id, record_type=record_type, data=dict(data),
+                    created_at=datetime.now(timezone.utc),
+                ))
+            else:
+                if record.record_type != record_type:
+                    raise ValueError("Research record type cannot change")
+                record.data = dict(data)
+
+    def get_research_record(self, record_id: str):
+        with self.sessions() as session:
+            record = session.get(ResearchRecord, record_id)
+            return {"record_type": record.record_type, **dict(record.data)} if record else None
+
+    def save_trading_record(self, record_type: str, record_id: str, environment: str, data: dict):
+        if record_type not in {"risk_event", "demo_account", "order", "position"}:
+            raise ValueError("Unsupported trading record type")
+        if environment not in {"research", "demo", "live"}:
+            raise ValueError("Invalid environment")
+        if environment == "live":
+            raise ValueError("Live trading persistence is disabled")
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(TradingRecord, record_id)
+            if record is None:
+                session.add(TradingRecord(
+                    id=record_id, record_type=record_type, environment=environment,
+                    data=dict(data), created_at=datetime.now(timezone.utc),
+                ))
+            else:
+                if record.record_type != record_type or record.environment != environment:
+                    raise ValueError("Trading record identity and environment are immutable")
+                record.data = dict(data)
 
     def close(self):
         self.engine.dispose()
