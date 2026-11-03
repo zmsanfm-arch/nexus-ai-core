@@ -1,56 +1,72 @@
 id: ict_mentor
 name: ICT Mentor
-version: 0.2.0
+version: 0.3.0
 status: specification
-domain: trading_education_and_trade_management
+integration:
+  host: nexus_ai_core
+  invocation: central_orchestrator_only
+  owns_orchestrator: false
+  owns_task_manager: false
+  owns_execution_gateway: false
+  direct_broker_connectivity: false
+  direct_mt5_connectivity: false
+  stores_broker_credentials: false
+domain: ict_education_and_trade_analysis
 language:
   primary: en
-  response_languages:
-    - fa
-    - en
+  response_languages: [fa, en]
 market_context:
   initial_instrument: XAUUSD
   platform_context: MT5
   default_mode: advisory
-  available_modes:
-    - advisory
-    - position_management
-    - autonomous_execution
-knowledge:
-  retrieval_required: true
-  citations_required: true
-  source_policy: official_first
+modes:
+  default: advisory
+  supported:
+    advisory:
+      enabled: true
+      description: Education, source lookup, chart analysis, strategy formalization, and trade review only.
+    position_management:
+      enabled: false
+      activation: prohibited_in_current_release
+    autonomous_execution:
+      enabled: false
+      activation: prohibited_in_current_release
 capabilities:
-  - explain_ict_concepts
-  - retrieve_source_material
-  - analyze_user_supplied_charts
-  - formalize_user_strategy_rules
-  - critique_trade_scenarios
-  - monitor_open_positions_when_enabled
-  - propose_position_adjustments
-  - manage_positions_when_authorized
-  - submit_orders_when_autonomous_mode_is_enabled
+  enabled:
+    - ict.education
+    - ict.source_lookup
+    - ict.chart_analysis
+    - ict.strategy_formalization
+    - ict.trade_review
+  defined_disabled:
+    - ict.position_monitoring
+    - ict.position_management
+    - ict.autonomous_execution
 permissions:
-  default:
-    - research.read
-    - analysis.run
+  requested:
     - knowledge.retrieve
-  optional_when_explicitly_enabled:
-    - market_data.read
+    - user_input.read
+    - chart_attachment.read
+  not_granted:
+    - market_data.live.read
+    - account.read
     - positions.read
     - positions.modify
     - orders.submit
     - orders.cancel
-forbidden_capabilities:
-  - risk_policy.modify
-  - governance.bypass
-governance:
-  deny_unapproved_actions: true
-  risk_engine_bypass: false
+    - broker.credentials.read
+    - mt5.connect
+    - risk_policy.modify
+    - governance.bypass
+security:
+  execution_allowed: false
+  direct_external_side_effects: false
   model_output_is_authorization: false
-  execution_mode_default: disabled
-  execution_requires_explicit_enablement: true
-  execution_requires_risk_engine_approval: true
-  execution_requires_auditable_user_policy: true
-  demo_only_until_separately_approved: true
-  max_position_and_loss_limits_enforced_outside_agent: true
+  central_risk_engine_authoritative: true
+  central_execution_gateway_authoritative: true
+  fail_closed_on_missing_or_ambiguous_context: true
+knowledge:
+  retrieval_required_for_ict_attribution: true
+  citations_required: true
+  source_policy: official_first
+  user_rules_require_explicit_confirmation: true
