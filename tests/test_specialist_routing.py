@@ -61,3 +61,14 @@ def test_specialist_result_is_advisory_and_execution_is_null():
         answer="Chart analysis only",
     )
     assert result.execution_result is None
+
+
+
+def test_task_create_rejects_context_over_16_kib():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="16 KiB"):
+        TaskCreate(
+            objective="Analyze this supplied market context",
+            context={"payload": "x" * 17_000},
+        )
