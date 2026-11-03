@@ -15,7 +15,7 @@ class FakeRouter:
 
 def test_disabled_ict_task_fails_closed_at_orchestrator():
     store = InMemoryStore()
-    orchestrator = Orchestrator(AgentRegistry(), object(), store, FakeRouter())
+    orchestrator = Orchestrator(AgentRegistry(manifest_dirs=[]), object(), store, FakeRouter())
     task = orchestrator.submit(
         "Analyze this XAUUSD chart",
         task_type="ict.chart_analysis",
