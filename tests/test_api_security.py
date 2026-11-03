@@ -122,3 +122,32 @@ def test_registry_does_not_advertise_placeholder_agents_as_active(client):
         agent["status"] in {"catalog_only", "disabled", "specification"}
         for agent in agents.values()
     )
+
+
+def test_research_routes_require_admin_for_writes(client):
+    response = client.post(
+        "/research/experiments",
+        headers={"Authorization": "Bearer test-api-token"},
+        json={"data": {"experiment_id": "exp-1"}},
+    )
+    assert response.status_code == 403
+
+
+def test_experiment_contract_rejects_incomplete_payload(client):
+    response = client.post(
+        "/research/experiments",
+        headers={"Authorization": "Bearer test-admin-token"},
+        json={"data": {"experiment_id": "exp-incomplete"}},
+    )
+    assert response.status_code == 422
+    assert "Invalid research contract" in response.json()["detail"]
+
+
+def test_strategy_contract_rejects_path_payload_mismatch(client):
+    response = client.post(
+        "/strategies/gold-ict/versions",
+        headers={"Authorization": "Bearer test-admin-token"},
+        json={"data": {"strategy_id": "different-id", "version": "1.0.0"}},
+    )
+    assert response.status_code == 422
+    assert "must match URL" in response.json()["detail"]
