@@ -1,12 +1,11 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, create_engine, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, Integer, String, create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
 
@@ -34,9 +33,24 @@ class AuditRecord(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+
+
+
+class TaskQueueRecord(Base):
+    __tablename__ = "task_queue"
+    task_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
-    def __init__(self, database_url: str | None = None):
+    def __init__(self, database_url: str | None = None, run_migrations: bool = True):
         url = database_url or os.getenv("DATABASE_URL", "sqlite:///./data/nexus.db")
         if url.startswith("sqlite:///"):
             db_path = url.removeprefix("sqlite:///")
@@ -48,7 +62,36 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        Base.metadata.create_all(self.engine)
+        if run_migrations:
+            self._run_migrations()
+
+    def _run_migrations(self):
+        from alembic import command
+        from alembic.config import Config
+        from alembic.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False).replace("%", "%%"))
+        if os.getenv("NEXUS_SKIP_MIGRATIONS", "").strip().lower() in {"1", "true", "yes"}:
+            try:
+                with self.engine.connect() as connection:
+                    current = MigrationContext.configure(connection).get_current_revision()
+                expected = ScriptDirectory.from_config(config).get_current_head()
+            except Exception as exc:
+                raise RuntimeError("Database migration verification failed; run the dedicated migration release job.") from exc
+            if not expected or current != expected:
+                raise RuntimeError("Database schema is not at the application migration head; run the dedicated migration release job.")
+            return
+        with self.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+
+    def check_database(self):
+        """Execute a minimal round-trip query against the configured database."""
+        with self.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
 
     def save_task(self, task: dict):
         with self._lock, self.sessions.begin() as session:
@@ -77,6 +120,30 @@ class SQLAlchemyStore:
             record = session.get(ApprovalRecord, approval_id)
             return dict(record.data) if record else None
 
+    def create_approval_with_audit(self, approval: dict, event: dict):
+        with self._lock, self.sessions.begin() as session:
+            session.add(ApprovalRecord(id=approval["id"], data=dict(approval)))
+            session.add(AuditRecord(data=dict(event), recorded_at=datetime.now(timezone.utc)))
+
+    def decide_approval_with_audit(self, approval_id: str, approved: bool, reviewer: str):
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(ApprovalRecord).where(ApprovalRecord.id == approval_id).with_for_update()
+            )
+            if record is None:
+                raise KeyError(approval_id)
+            item = dict(record.data)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            record.data = item
+            session.add(AuditRecord(data={
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+            }, recorded_at=datetime.now(timezone.utc)))
+            return item
+
     def append_audit(self, event: dict):
         with self._lock, self.sessions.begin() as session:
             session.add(AuditRecord(
@@ -94,6 +161,119 @@ class SQLAlchemyStore:
                 for record in reversed(records)
             ]
 
+
+    def enqueue_task(self, task: dict):
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            existing = session.get(TaskQueueRecord, task["id"])
+            if existing is not None:
+                raise ValueError("Task is already queued.")
+            task_record = session.get(TaskRecord, task["id"])
+            if task_record is None:
+                session.add(TaskRecord(id=task["id"], data=dict(task)))
+            session.add(TaskQueueRecord(
+                task_id=task["id"], status="queued", attempts=0,
+                available_at=now, lease_owner=None, lease_expires_at=None,
+                last_error=None, updated_at=now,
+            ))
+
+    def claim_next_task(self, worker_id: str, lease_seconds: int = 60):
+        if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
+            raise ValueError("Invalid worker identity or lease duration.")
+        now = datetime.now(timezone.utc)
+        # PostgreSQL row-level SKIP LOCKED is the concurrency primitive here.
+        # Do not serialize independent worker claims behind a process-local mutex.
+        with self.sessions.begin() as session:
+            query = (
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.available_at <= now,
+                    (TaskQueueRecord.status == "queued") |
+                    ((TaskQueueRecord.status == "leased") &
+                     (TaskQueueRecord.lease_expires_at <= now)),
+                )
+                .order_by(TaskQueueRecord.available_at.asc(), TaskQueueRecord.task_id.asc())
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+            record = session.scalar(query)
+            if record is None:
+                return None
+            record.status = "leased"
+            record.attempts += 1
+            record.lease_owner = worker_id
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return {"task_id": record.task_id, "attempts": record.attempts,
+                    "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
+
+    def renew_queued_task_lease(self, task_id: str, worker_id: str, lease_seconds: int) -> bool:
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.task_id == task_id,
+                    TaskQueueRecord.status == "leased",
+                    TaskQueueRecord.lease_owner == worker_id,
+                    TaskQueueRecord.lease_expires_at > now,
+                )
+                .with_for_update()
+            )
+            if record is None:
+                return False
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return True
+
+    def queue_summary(self):
+        with self.sessions() as session:
+            rows = session.execute(
+                select(TaskQueueRecord.status, func.count())
+                .group_by(TaskQueueRecord.status)
+            ).all()
+        summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+        for status, count in rows:
+            summary[status] = int(count)
+        summary["total"] = sum(summary.values())
+        return summary
+
+    def complete_queued_task(self, task_id: str, worker_id: str):
+        return self._finish_queued_task(task_id, worker_id, "completed", None)
+
+    def fail_queued_task(self, task_id: str, worker_id: str, error: str,
+                         max_attempts: int = 3, retry_delay_seconds: int = 30):
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        safe_error = str(error)[:500]
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(TaskQueueRecord, task_id)
+            if record is None or record.status != "leased" or record.lease_owner != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            record.last_error = safe_error
+            record.lease_owner = None
+            record.lease_expires_at = None
+            record.status = "dead" if record.attempts >= max_attempts else "queued"
+            record.available_at = now + timedelta(seconds=retry_delay_seconds)
+            record.updated_at = now
+            return record.status
+
+    def _finish_queued_task(self, task_id: str, worker_id: str, status: str, error):
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.get(TaskQueueRecord, task_id)
+            if record is None or record.status != "leased" or record.lease_owner != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            record.status = status
+            record.lease_owner = None
+            record.lease_expires_at = None
+            record.last_error = error
+            record.updated_at = now
+            return status
+
     def close(self):
         self.engine.dispose()
 
@@ -104,7 +284,12 @@ class InMemoryStore:
         self.tasks = {}
         self.approvals = {}
         self.audit = []
+        self.queue = {}
         self._lock = RLock()
+
+    def check_database(self):
+        """The in-memory test store is always available while instantiated."""
+        return True
 
     def save_task(self, task):
         with self._lock:
@@ -124,6 +309,123 @@ class InMemoryStore:
             item = self.approvals.get(approval_id)
             return dict(item) if item else None
 
+    def create_approval_with_audit(self, approval, event):
+        with self._lock:
+            if approval["id"] in self.approvals:
+                raise ValueError("Approval already exists")
+            self.approvals[approval["id"]] = dict(approval)
+            self.audit.append({**event, "recorded_at": datetime.now(timezone.utc).isoformat()})
+
+    def decide_approval_with_audit(self, approval_id, approved, reviewer):
+        with self._lock:
+            item = self.approvals.get(approval_id)
+            if item is None:
+                raise KeyError(approval_id)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item = dict(item)
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            self.approvals[approval_id] = item
+            self.audit.append({
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return item
+
+
+    def enqueue_task(self, task):
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            if task["id"] in self.queue:
+                raise ValueError("Task is already queued.")
+            self.tasks[task["id"]] = dict(task)
+            self.queue[task["id"]] = {
+                "task_id": task["id"], "status": "queued", "attempts": 0,
+                "available_at": now, "lease_owner": None, "lease_expires_at": None,
+                "last_error": None, "updated_at": now,
+            }
+
+    def claim_next_task(self, worker_id, lease_seconds=60):
+        if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
+            raise ValueError("Invalid worker identity or lease duration.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            candidates = [
+                item for item in self.queue.values()
+                if item["available_at"] <= now and (
+                    item["status"] == "queued" or (
+                        item["status"] == "leased" and item["lease_expires_at"] <= now
+                    )
+                )
+            ]
+            if not candidates:
+                return None
+            item = min(candidates, key=lambda x: (x["available_at"], x["task_id"]))
+            item["status"] = "leased"
+            item["attempts"] += 1
+            item["lease_owner"] = worker_id
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
+
+    def renew_queued_task_lease(self, task_id, worker_id, lease_seconds):
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (
+                item is None or item["status"] != "leased"
+                or item["lease_owner"] != worker_id
+                or item["lease_expires_at"] <= now
+            ):
+                return False
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return True
+
+    def queue_summary(self):
+        with self._lock:
+            summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+            for item in self.queue.values():
+                summary[item["status"]] = summary.get(item["status"], 0) + 1
+            summary["total"] = sum(summary.values())
+            return summary
+
+    def complete_queued_task(self, task_id, worker_id):
+        return self._finish_queued_task(task_id, worker_id, "completed", None)
+
+    def fail_queued_task(self, task_id, worker_id, error, max_attempts=3, retry_delay_seconds=30):
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if item is None or item["status"] != "leased" or item["lease_owner"] != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            item["last_error"] = str(error)[:500]
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["status"] = "dead" if item["attempts"] >= max_attempts else "queued"
+            item["available_at"] = now + timedelta(seconds=retry_delay_seconds)
+            item["updated_at"] = now
+            return item["status"]
+
+    def _finish_queued_task(self, task_id, worker_id, status, error):
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if item is None or item["status"] != "leased" or item["lease_owner"] != worker_id:
+                raise ValueError("Task lease is not owned by this worker.")
+            item["status"] = status
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["last_error"] = error
+            item["updated_at"] = now
+            return status
+
     def append_audit(self, event):
         with self._lock:
             self.audit.append({
@@ -133,4 +435,4 @@ class InMemoryStore:
 
 
 # Application default: durable SQL storage. InMemoryStore remains test-only.
-store = SQLAlchemyStore()
+store = SQLAlchemyStore(run_migrations=os.getenv("NEXUS_MIGRATION_COMMAND", "").strip().lower() not in {"1", "true", "yes"})
