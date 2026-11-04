@@ -17,7 +17,7 @@ A mission contains:
 - `max_total_attempts`: total planned invocation budget, capped at 64.
 - `approval_policy`: currently fixed to `required_for_external_actions`.
 
-Each node contains a unique `node_id`, a registered `agent_id`, dependency IDs, and a per-node attempt ceiling. The compiler rejects duplicate IDs, unknown dependencies, cycles, unregistered agents, and budget overruns.
+Each node contains a unique `node_id`, a registered `agent_id`, an explicit `capability`, dependency IDs, and a per-node attempt ceiling. The compiler rejects duplicate IDs, unknown dependencies, cycles, unregistered agents, and budget overruns.
 
 Registration is not authorization. A future runtime must separately verify the agent's enabled status, capability grants, central permission policy, installed handler, and mission-level action policy before invoking it.
 
@@ -69,4 +69,4 @@ nodes:
 
 ## Current implementation boundary
 
-The current increment supplies strict mission validation and DAG compilation only. Dynamic mission execution, parallel scheduling, persistent mission definitions, UI management, external connectors, media generation, and autonomous publishing remain unimplemented. The core must not represent a mission as executed or completed until those capabilities exist and their independent safety checks pass.
+The current increment adds a sequential advisory-only mission runtime for installed specialist handlers. It checks registered/enabled agent state, declared capability, central permission policy, and handler presence before each node; it passes only completed dependency outputs and applies bounded per-node attempts. Unknown capabilities fail closed. The runtime has no external-action or connector interface and reports `final_audit: not_performed`; `succeeded` means only that all configured advisory nodes returned valid results, not that the mission passed an independent final audit. Dynamic routing, parallel scheduling, persistent mission definitions, UI management, external connectors, media generation, and autonomous publishing remain unimplemented.
