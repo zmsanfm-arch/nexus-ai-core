@@ -72,7 +72,7 @@ def runtime(handler, permissions=None):
 def test_runtime_executes_nodes_sequentially_and_passes_dependency_outputs():
     handler = Handler()
     result = runtime(handler).execute(mission(), task_id="task-1")
-    assert result["status"] == "succeeded"
+    assert result["status"] == "nodes_succeeded"
     assert result["attempts_used"] == 2
     assert result["final_audit"] == "not_performed"
     assert handler.calls == 2
