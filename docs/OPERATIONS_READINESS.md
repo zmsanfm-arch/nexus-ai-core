@@ -1,7 +1,5 @@
 # NEXUS AI CORE — Operational Readiness & Deployment Runbook
 
-**Status: NOT APPROVED FOR PUBLIC PRODUCTION.** This runbook prepares a controlled single-host deployment. It does not authorize public launch, paid hosting, external model-provider use, or trading connectivity.
-
 **Status: NOT APPROVED FOR PUBLIC PRODUCTION.** This runbook prepares a controlled deployment and records current evidence. It does not authorize public launch, external model-provider use, or trading connectivity.
 
 ## Current Railway deployment evidence (2026-11-04)
@@ -18,7 +16,7 @@
 
 ## Current implementation facts
 
-- FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist on the integration branch.
+- FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist in the mainline.
 - ICT Mentor is advisory-only. Broker/MT5 connectivity, account/position access, order execution, and live trading must remain disabled.
 - Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, uses bounded retries/dead-letter handling, and renews owner-checked leases while a task is running. Lease loss is audited and prevents the stale worker from committing a result. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
@@ -30,7 +28,7 @@
 
 ## Deployment package
 
-`docker-compose.production.yml` provides a hardened single-host starting point:
+The active Railway deployment uses the Dockerfile and the one-shot `python scripts/migrate_release.py` release command. The API verifies the exact Alembic head on startup and is not permitted to perform implicit migrations. `docker-compose.production.yml` remains an alternative hardened single-host deployment package:
 - PostgreSQL is private to the Compose network and persists in a named volume.
 - API binds only to host loopback (`127.0.0.1:8000`) behind a separately configured TLS reverse proxy.
 - API container runs non-root, read-only, drops Linux capabilities, and sets `no-new-privileges`.
@@ -157,7 +155,7 @@ No host, domain, DNS record, certificate, or firewall change is performed by thi
 | Backups | Encrypted backup/restore script and disposable PostgreSQL CI drill pass | Provision off-host production backups, retention, key custody, and measured production restore/RPO/RTO |
 | Observability | `/health`, PostgreSQL-backed `/ready`, admin queue summary, Railway resource metrics; no active external alert delivery | Configure external uptime/latency/DB-capacity monitoring, webhook delivery, log retention/redaction, and worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
-| Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
+| Market/research data | Immutable strategy versions, experiment plans, lifecycle history, and historical OHLC datasets are persisted; no broker-grade/live feed | Continue research validation; do not use backtests as execution authorization |
 | Model-provider transport | HTTPS-only remote endpoints, strict URL validation, bounded finite timeouts, redirects disabled | Verify provider TLS/hostname policy and credentials handling during independent security review |
 | Security assurance | CI dependency audit, Bandit, container smoke test, and code-level controls pass; no independent assessment | User-designated independent security/recovery review after internal completion; remediate and retest findings |
 | Trading | Disabled | Keep disabled; no broker/account/order connectivity |
