@@ -77,7 +77,7 @@ BACKUP_DIR=/var/backups/nexus ./scripts/backup_postgres_encrypted.sh
 
 ### Isolated restore drill
 
-Create a disposable PostgreSQL database whose name starts with `nexus_restore_`. Set `NEXUS_RESTORE_DATABASE_URL` to its connection URL and set `NEXUS_RESTORE_ALLOWED_DATABASE_URL` separately to the exact same URL after independently verifying the host and database are disposable. The script requires exact URL equality as well as the isolated database-name prefix; the prefix alone does not establish host isolation. It checks the checksum when present and uses `pg_restore --exit-on-error`; a successful exit is necessary but not sufficient—also verify Alembic head, row counts, key API reads, audit continuity, and queue state. Never point this script at production.
+Create a disposable PostgreSQL database whose name starts with `nexus_restore_`. Set `NEXUS_RESTORE_DATABASE_URL` to its connection URL and set `NEXUS_RESTORE_ALLOWED_DATABASE_URL` separately to the exact same URL after independently verifying the host and database are disposable. The script requires exact URL equality as well as the isolated database-name prefix; the prefix alone does not establish host isolation. It requires and verifies the SHA-256 sidecar before decryption and uses `pg_restore --exit-on-error`; a successful exit is necessary but not sufficient—also verify Alembic head, row counts, key API reads, audit continuity, and queue state. Never point this script at production.
 
 ```bash
 BACKUP_FILE=/var/backups/nexus/nexus-YYYYMMDDTHHMMSSZ.dump.age \
