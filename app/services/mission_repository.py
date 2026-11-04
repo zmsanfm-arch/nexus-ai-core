@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import DateTime, String, select
+from sqlalchemy import DateTime, JSON, String, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,7 @@ class MissionRecord(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     principal_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    data: Mapped[dict[str, Any]] = mapped_column(nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
