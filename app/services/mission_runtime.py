@@ -153,7 +153,7 @@ class MissionRuntime:
             final_audit="not_performed",
         )
         return {
-            "status": "succeeded",
+            "status": "nodes_succeeded",
             "mission_id": mission.mission_id,
             "task_id": task_id,
             "outputs": outputs,
