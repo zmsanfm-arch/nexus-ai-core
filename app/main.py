@@ -4,14 +4,17 @@ import os
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.storage import store
+from app.production_config import validate_production_environment
 from app.services.task_lifecycle import TaskQueueService
 from app.services.knowledge_store import KnowledgeStoreAdapter
+from app.services.research_routes import register_research_routes
 from app.schemas import BacktestRunCreate
 from app.backtesting.engine import Candle, TradeIntent, ExecutionCosts, BacktestConfig, run_backtest
 from app.backtesting.evaluator import evaluate_trades, evaluate_acceptance
@@ -28,6 +31,14 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
+
+
+@app.on_event("startup")
+def production_preflight():
+    errors = validate_production_environment()
+    if errors:
+        # Error messages contain setting names only, never configured secret values.
+        raise RuntimeError("Production configuration rejected: " + "; ".join(errors))
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
@@ -68,6 +79,19 @@ def health():
     }
 
 
+@app.get("/ready")
+def readiness():
+    """Report readiness only when the persistence layer answers a query."""
+    try:
+        store.check_database()
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "checks": {"database": "unavailable"}},
+        )
+    return {"status": "ready", "checks": {"database": "ok"}}
+
+
 @app.get("/agents")
 def list_agents(_: str = Depends(require_api_access)):
     return {"agents": registry.list_agents()}
@@ -106,6 +130,12 @@ def list_audit(
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
     return {"events": store.list_audit(limit=limit)}
+
+
+@app.get("/admin/queue")
+def queue_status(reviewer_id: str = Depends(require_admin)):
+    """Expose aggregate queue state to administrators without task payloads or errors."""
+    return {"queue": store.queue_summary()}
 
 
 @app.post("/approvals/{approval_id}/decision")
@@ -227,3 +257,6 @@ def run_research_backtest(
             "A passing research gate is not trade authorization.",
         ],
     }
+
+# Strategy, experiment and historical market-data routes share central auth and audit.
+register_research_routes(app, store, require_api_access, require_admin)
