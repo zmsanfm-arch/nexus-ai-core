@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
+from app.services.mission_contract import MissionDefinition, MissionContractError, compile_mission
+from app.services.mission_repository import MissionAlreadyExists, MissionRepository
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
@@ -96,6 +98,7 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
+mission_repository = MissionRepository(store)
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
@@ -152,6 +155,52 @@ def readiness():
 @app.get("/agents")
 def list_agents(_: str = Depends(require_api_access)):
     return {"agents": registry.list_agents()}
+
+
+@app.post("/missions")
+def create_mission(
+    payload: MissionDefinition,
+    principal_id: str = Depends(require_api_access),
+):
+    """Validate and persist a principal-owned mission definition; does not execute it."""
+    try:
+        compile_mission(payload, {item["id"] for item in registry.list_agents()})
+    except MissionContractError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        mission = mission_repository.create(
+            payload.mission_id,
+            principal_id,
+            payload.model_dump(mode="json"),
+        )
+    except MissionAlreadyExists as exc:
+        raise HTTPException(status_code=409, detail="Mission ID already exists") from exc
+    store.append_audit({
+        "event": "mission_definition_created",
+        "mission_id": payload.mission_id,
+        "principal_id": principal_id,
+        "node_count": len(payload.nodes),
+    })
+    return {
+        "mission": mission,
+        "execution_status": "not_started",
+        "execution_available": False,
+    }
+
+
+@app.get("/missions/{mission_id}")
+def get_mission(
+    mission_id: str,
+    principal_id: str = Depends(require_api_access),
+):
+    mission = mission_repository.get(mission_id, principal_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    return {
+        "mission": mission,
+        "execution_status": "not_started",
+        "execution_available": False,
+    }
 
 
 @app.post("/tasks", response_model=TaskView)
