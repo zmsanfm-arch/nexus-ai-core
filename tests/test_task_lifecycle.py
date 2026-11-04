@@ -63,3 +63,23 @@ def test_sql_store_persists_queue_state_across_recreation(tmp_path):
     assert saved_lease is None
     assert second.complete_queued_task(task["id"], "durable-worker") == "completed"
     second.close()
+
+
+def test_worker_records_nonpass_auditor_verdict_as_blocked_task():
+    store = InMemoryStore()
+    task = TaskQueueService(store).enqueue("Run an audited task")
+    worker = TaskWorker(
+        store,
+        "worker-auditor",
+        lambda item: {"audit_verdict": "revise", "report": {"audit": {"verdict": "revise"}}},
+        lease_seconds=10,
+    )
+
+    assert worker.run_once() is True
+    saved = store.get_task(task["id"])
+    assert saved["status"] == "blocked"
+    assert saved["result"]["audit_verdict"] == "revise"
+    assert store.queue[task["id"]]["status"] == "completed"
+    event = [item for item in store.audit if item["event"] == "task_worker_completed"][-1]
+    assert event["task_status"] == "blocked"
+    assert event["audit_verdict"] == "revise"
