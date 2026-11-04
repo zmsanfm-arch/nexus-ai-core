@@ -80,7 +80,12 @@ class TaskWorker:
             if not isinstance(result, dict):
                 raise TypeError("Task handler must return a dictionary.")
             task["result"] = result
-            task["status"] = "completed"
+            # Queue execution can complete while the business task remains blocked
+            # by the independent auditor gate.
+            audit_verdict = result.get("audit_verdict")
+            task["status"] = (
+                "blocked" if audit_verdict in {"revise", "block"} else "completed"
+            )
             task["completed_at"] = datetime.now(timezone.utc).isoformat()
             self.storage.save_task(task)
             self.storage.complete_queued_task(task_id, self.worker_id)
@@ -88,6 +93,8 @@ class TaskWorker:
                 "event": "task_worker_completed",
                 "task_id": task_id,
                 "worker_id": self.worker_id,
+                "task_status": task["status"],
+                "audit_verdict": audit_verdict,
             })
         except Exception as exc:
             queue_status = self.storage.fail_queued_task(
