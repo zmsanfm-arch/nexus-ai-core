@@ -1,6 +1,6 @@
 # ICT Mentor Integration Reconciliation — Current State
 
-**Last reviewed: 2026-11-04.** This document supersedes the earlier pre-integration reconciliation snapshot.
+**Last reviewed: 2026-11-04.** This document records the reconciled PR chain and current release boundary.
 
 ## Current source of truth
 
@@ -14,8 +14,19 @@ The current PR chain is:
 4. PR #5 — Alembic migrations and PostgreSQL validation; base: PR #4 branch.
 5. PR #6 — hardened single-host deployment preparation and runbook; base: PR #5 branch.
 6. PR #7 — indexed multilingual lexical knowledge retrieval; base: PR #6 branch.
+7. PR #9 — supervised worker runtime; base: PR #7 branch.
+8. PR #10 — queue observability; base: PR #9 branch.
+9. PR #11 — database readiness; base: PR #10 branch.
+10. PR #12 — dedicated migration release; base: PR #11 branch.
+11. PR #13 — reconciled model-provider transport; base: PR #12 branch.
+12. PR #14 — encrypted backups, restore-drill tooling, secret rotation and alert readiness; base: PR #13 branch.
+13. PR #15 — monitoring endpoint validation; base: PR #14 branch.
+14. PR #1 — reconciled ICT foundation plus strategy research and market-data persistence; base: PR #15 branch.
 
-All six PRs remain open Drafts in this review. They are stacked and must be reviewed/integrated in dependency order. A green CI run on each head does not mean the chain is merged or released. The default `main` branch remains the earlier MVP baseline until the PR chain is deliberately integrated.
+PR #8 was closed as superseded by PR #13. PR #1 is no longer a divergent standalone branch: its head is a merge commit based on PR #15 and retains the original PR #1 history as a second parent. Its legacy direct ICT endpoint is not present in the reconciled tree.
+
+PRs #2–#7, #9–#15, and #1 are open and marked Ready for review. All have green exact-head CI and GitHub currently reports them mergeable. None has been merged into `main`; the default branch is still the earlier baseline until the stack is reviewed and deliberately integrated.
+
 
 ## ICT Mentor contract and permissions
 
@@ -44,26 +55,29 @@ The following capabilities remain excluded:
 
 No broker credentials or trading account are required for this phase. Backtesting is research-only, uses midpoint OHLC and explicit trade intents, and is not a broker-grade execution simulator or trade authorization.
 
-## Separate Forex branch — PR #1
+## Reconciled Forex branch — PR #1
 
-PR #1 (`feature/ict-mentor-agent-foundation`) is a separate, divergent branch that overlaps central API, authentication, storage, orchestration, and CI files. GitHub currently reports it as non-mergeable, and no PR-triggered CI run was associated with its current head during this review.
+PR #1 (`feature/ict-mentor-agent-foundation`) has been reconciled as the final child of PR #15. Its current head is the latest commit shown on PR #1; CI must be checked against that exact SHA before merge. The branch tree is based on PR #15's current head and preserves the original PR #1 history without reintroducing its direct ICT invocation route.
 
-Do not merge PR #1 wholesale, rebase it blindly, or change the central PR chain to depend on it. Any unique assets still needed from that branch must be reconciled selectively against the already integrated central implementation, with tests and review.
+The reconciled PR adds the previously missing strategy-version, experiment, strategy-transition, and immutable historical market-dataset APIs. Writes require administrator authentication; reads require API authentication. Dataset imports are bounded and checksummed. The migration is chained after the current Alembic head. Demo promotion and execution remain disabled.
+
 
 ## Current validation snapshot
 
-As of this review, exact-head CI runs for PRs #2 through #7 completed successfully:
+Exact-head CI for every open PR in the stack is green as of 2026-11-04:
 
-- PR #2: Python test job passed.
-- PRs #3–#7: Python 3.11 tests, Python 3.12 tests, and Docker build/container smoke checks passed.
+- PRs #2–#7 and #9–#14: Python test jobs passed.
+- PR #15: Python 3.11/3.12 tests and container build/health smoke passed.
+- PR #1 at `ca25ad3dd5e31fa886843548ebe92952e45a4f44`: Python 3.11/3.12 tests, container build, PostgreSQL backup/restore drill and research API security tests passed (CI run #390, `41892817848`).
 
-This validation applies to the exact commit heads inspected on 2026-11-04. Any subsequent commit requires a fresh green run on its new SHA.
+PR #1's earlier run failed on an overlong Alembic revision identifier and stale migration-head assertions. Both were corrected; the latest exact-head run passed. GitHub currently reports all open stack PRs mergeable. A green CI run is not a security review or production release approval.
+
 
 ## Operational and release blockers
 
 The repository is not approved for public production deployment. The following are still required:
 
-- Complete review and deliberate integration of the stacked PR chain; reconcile PR #1 separately.
+- Complete independent review and deliberate integration of the stacked PR chain. PR #1 is now the final child of PR #15; PR #8 is closed as superseded.
 - A standalone worker entrypoint, approved task handler, supervised worker service, and operational queue/dead-letter monitoring before queued tasks are advertised as operational.
 - A dedicated migration release step/lock before running multiple API/worker instances; current storage initialization applies migrations at startup.
 - Production identity beyond one configured API principal/admin token, including OIDC or equivalent multi-user identity and credential lifecycle.
