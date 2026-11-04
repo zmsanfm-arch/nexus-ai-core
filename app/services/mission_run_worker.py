@@ -52,11 +52,7 @@ class MissionRunWorker:
             return True
 
         try:
-            mission = MissionDefinition.model_validate({
-                key: value for key, value in run.items()
-                if key in {"mission_id", "name", "objective", "nodes",
-                           "max_total_attempts", "approval_policy"}
-            })
+            mission = MissionDefinition.model_validate(run["definition"])
             agents = {item["id"]: item for item in self.registry.list_agents()}
             plan = compile_mission(mission, set(agents))
             node_states = {item["node_id"]: item for item in run["nodes"]}
