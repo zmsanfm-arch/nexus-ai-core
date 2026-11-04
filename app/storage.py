@@ -205,6 +205,27 @@ class SQLAlchemyStore:
             return {"task_id": record.task_id, "attempts": record.attempts,
                     "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
 
+    def renew_queued_task_lease(self, task_id: str, worker_id: str, lease_seconds: int) -> bool:
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.task_id == task_id,
+                    TaskQueueRecord.status == "leased",
+                    TaskQueueRecord.lease_owner == worker_id,
+                    TaskQueueRecord.lease_expires_at > now,
+                )
+                .with_for_update()
+            )
+            if record is None:
+                return False
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return True
+
     def queue_summary(self):
         with self.sessions() as session:
             rows = session.execute(
@@ -346,6 +367,22 @@ class InMemoryStore:
             item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
             item["updated_at"] = now
             return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
+
+    def renew_queued_task_lease(self, task_id, worker_id, lease_seconds):
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (
+                item is None or item["status"] != "leased"
+                or item["lease_owner"] != worker_id
+                or item["lease_expires_at"] <= now
+            ):
+                return False
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return True
 
     def queue_summary(self):
         with self._lock:
