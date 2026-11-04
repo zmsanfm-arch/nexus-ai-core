@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "integration/**", "feature/**", "audit/**"]
+    branches: [main, "integration/**", "feature/**", "audit/**", "ops/**"]
   pull_request:
 
 permissions:
@@ -56,3 +56,21 @@ jobs:
         uses: actions/checkout@v4
       - name: Build container
         run: docker build --tag nexus-ai-core:ci .
+      - name: Smoke-test container startup and health
+        run: |
+          set -eu
+          docker run -d --name nexus-ai-core-smoke -p 127.0.0.1:8000:8000 nexus-ai-core:ci
+          trap 'docker rm -f nexus-ai-core-smoke >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 40); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' nexus-ai-core-smoke)"
+            if [ "$status" = "healthy" ]; then
+              exit 0
+            fi
+            if [ "$status" = "unhealthy" ]; then
+              docker logs nexus-ai-core-smoke
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs nexus-ai-core-smoke
+          exit 1
