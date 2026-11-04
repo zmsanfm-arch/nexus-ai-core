@@ -57,7 +57,7 @@ No broker credentials or trading account are required for this phase. Backtestin
 
 ## Reconciled Forex branch — PR #1
 
-PR #1 (`feature/ict-mentor-agent-foundation`) has been reconciled as the final child of PR #15. Its current head is `a8d0c115cdf6859d2bc08212ceb91346fa260858`. The branch tree is based on PR #15's current head and preserves the original PR #1 history without reintroducing its direct ICT invocation route.
+PR #1 (`feature/ict-mentor-agent-foundation`) has been reconciled as the final child of PR #15. Its current head is the latest commit shown on PR #1; CI must be checked against that exact SHA before merge. The branch tree is based on PR #15's current head and preserves the original PR #1 history without reintroducing its direct ICT invocation route.
 
 The reconciled PR adds the previously missing strategy-version, experiment, strategy-transition, and immutable historical market-dataset APIs. Writes require administrator authentication; reads require API authentication. Dataset imports are bounded and checksummed. The migration is chained after the current Alembic head. Demo promotion and execution remain disabled.
 
