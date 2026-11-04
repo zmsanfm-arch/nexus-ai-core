@@ -112,6 +112,7 @@ class MissionRunRepository:
             "run_id": record.id, "mission_id": record.mission_id,
             "principal_id": record.principal_id, "status": record.status,
             "idempotency_key": record.idempotency_key,
+            "definition": dict(record.data),
             "nodes": [{
                 "node_id": node.node_id, "status": node.status,
                 "attempts": node.attempts, "output": node.output,
