@@ -23,7 +23,7 @@ def _tokens(value):
         char for char in value
         if unicodedata.category(char) not in {"Mn", "Me", "Cf"}
     ).casefold()
-    return set(re.findall(r"[^\\W_]{2,}", value, flags=re.UNICODE))
+    return set(re.findall(r"[^\W_]{2,}", value, flags=re.UNICODE))
 
 
 def upgrade():
