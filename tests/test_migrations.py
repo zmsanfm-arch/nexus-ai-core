@@ -9,7 +9,7 @@ from app.storage import SQLAlchemyStore
 
 EXPECTED_TABLES = {
     "alembic_version", "tasks", "approvals", "audit_events",
-    "task_queue", "knowledge_sources", "knowledge_chunks",
+    "task_queue", "knowledge_sources", "knowledge_chunks", "missions",
 }
 
 
@@ -19,7 +19,7 @@ def test_sqlite_schema_is_created_by_versioned_migration_and_is_idempotent(tmp_p
     inspector = inspect(first.engine)
     assert EXPECTED_TABLES.issubset(set(inspector.get_table_names()))
     with first.engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0004_missions"
     first.save_task({"id": "persisted-task", "status": "queued"})
     first.close()
 
