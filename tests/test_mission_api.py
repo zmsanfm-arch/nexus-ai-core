@@ -90,3 +90,11 @@ def test_mission_reads_are_principal_scoped(monkeypatch):
     monkeypatch.setenv("NEXUS_API_CLIENT_ID", "client-b")
     response = client.get("/missions/demo_mission", headers=headers)
     assert response.status_code == 404
+
+def test_mission_definition_api_rejects_undeclared_capability(monkeypatch):
+    client, headers = setup_api(monkeypatch)
+    payload = mission_payload()
+    payload["nodes"][0]["capability"] = "admin.execute"
+
+    response = client.post("/missions", json=payload, headers=headers)
+    assert response.status_code == 422
