@@ -1,7 +1,7 @@
 agent_id: ict_mentor
 name: ICT Mentor
-version: 0.1.0
-status: disabled
+version: 0.2.0
+status: registered
 mode: advisory
 capabilities:
   - ict.education
@@ -9,7 +9,10 @@ capabilities:
   - ict.chart_analysis
   - ict.strategy_formalization
   - ict.trade_review
-permissions: []
+permissions:
+  - knowledge.retrieve
+  - user_input.read
+  - chart_attachment.read
 requested_permissions:
   - knowledge.retrieve
   - user_input.read

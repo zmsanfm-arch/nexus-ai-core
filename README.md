@@ -2,80 +2,74 @@
 
 NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP development.
 
-## Current central foundation
+## Central foundation
 
-- FastAPI service, static agents, and manifest-driven specialist registry.
-- Sequential Research → Analysis → Auditor pipeline for untyped tasks.
-- Strict Pydantic contracts and bounded JSON input.
-- OpenAI-compatible model adapter using server-side environment variables.
+- FastAPI service, manifest-driven specialist registry, and sequential Research → Analysis → Auditor pipeline for untyped tasks.
+- Strict Pydantic contracts, bounded JSON inputs, and server-side model configuration.
 - SQLAlchemy persistence for tasks, approvals, audit events, and durable task queue leases.
 - Authenticated task submission and principal-scoped task reads.
-- Admin-only approvals and audit access with server-derived reviewer identity.
-- Central specialist authorization requires both a core allowlist entry and an explicit manifest grant.
-- Task queue has expiring worker leases, retry limits, dead-letter state, and audit events.
+- Admin-only approvals, audit access, knowledge-source ingestion, and aggregate queue observability.
+- Specialist dispatch requires both a central permission policy and an explicit manifest grant.
 
-## ICT Mentor integration status
+## ICT Mentor integration
 
-ICT Mentor is registered as disabled and advisory-only. Its initial capabilities are education, source lookup, user-supplied chart analysis, strategy formalization, and trade review.
+The integration branch registers ICT Mentor through the central Orchestrator and SpecialistRuntime for five advisory capabilities: education, source lookup, chart analysis, strategy formalization, and trade review. Each dispatch requires both the central PermissionService and the manifest grant.
 
-The central Pydantic contract now models the Forex project's v1 input/output structure, including source provenance, explicitly confirmed user rules, separate model inferences, structured proposed actions, constrained risk-decision vocabulary, and execution_result fixed to null.
+The handler retrieves source segments from the NEXUS-owned knowledge store, validates provenance, accepts only explicitly user-confirmed rules, and structurally forbids execution results. Knowledge search uses an indexed lexical baseline with Persian/Arabic Unicode normalization; it is not semantic/vector retrieval.
 
-The Forex manifest's three permissions are recorded as requests only: knowledge.retrieve, user_input.read, and chart_attachment.read. The granted permissions list remains empty. The specialist therefore cannot be dispatched. There is no ICT handler, no live market/account access, no MT5/broker connection, and no trade execution.
-
-See docs/ICT_INTEGRATION_RECONCILIATION.md and docs/SPECIALIST_AGENT_CONTRACT.md.
+**Trading boundary:** ICT Mentor is advisory-only. Position monitoring, position management, autonomous execution, MT5/broker connectivity, account/position access, order placement/cancellation, and live trading remain disabled. Backtesting is deterministic research-only midpoint OHLC simulation, not broker-grade execution simulation and never authorizes a trade.
 
 ## Model configuration
 
 Configure these in the runtime environment or deployment secret manager:
 
-- MODEL_BASE_URL: provider API base URL.
-- MODEL_NAME: exact model identifier.
-- MODEL_API_KEY: secret API key; never commit it.
-- MODEL_PROVIDER: optional provider label.
-- MODEL_TIMEOUT_SECONDS: optional timeout, default 45.
+- `MODEL_BASE_URL`: provider API base URL.
+- `MODEL_NAME`: exact model identifier.
+- `MODEL_API_KEY`: secret API key; never commit it.
+- `MODEL_PROVIDER`: optional provider label.
+- `MODEL_TIMEOUT_SECONDS`: optional timeout, default 45.
 
 Without the required model settings, model-dependent tasks return blocked; they do not pretend inference ran.
 
 ## Storage and task lifecycle
 
-- Default database: sqlite:///./data/nexus.db.
-- PostgreSQL: set DATABASE_URL when a PostgreSQL service is provisioned.
-- POST /tasks executes through the current synchronous orchestration path.
-- POST /tasks/queued durably enqueues a task and returns its queued state.
-- GET /tasks/{task_id} returns a task only to its owning API principal.
-- Worker primitives implement leases, retries, ownership checks, and dead-letter state in app/services/task_lifecycle.py.
-
-A deployment must run a separately supervised worker process and inject an approved task handler before queued tasks are processed. The repository currently provides the queue and worker lifecycle library, not an always-on worker service or a configured cloud deployment. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
+- Default database: `sqlite:///./data/nexus.db`.
+- PostgreSQL: set `DATABASE_URL` when PostgreSQL is provisioned.
+- `POST /tasks` executes through the synchronous orchestration path.
+- `POST /tasks/queued` durably enqueues a task.
+- `GET /tasks/{task_id}` returns a task only to its owning API principal.
+- Worker lifecycle includes a standalone `python -m app.worker_entrypoint` process and an opt-in supervised Compose service (`--profile worker`). The generic worker only accepts `general` tasks; unregistered specialist and execution task types fail closed. The service requires an explicitly approved and configured model provider.
+- Non-pass or missing auditor verdicts leave the business task blocked even when queue processing completes. Queue state is visible through admin-only `GET /admin/queue`, which returns aggregate counts only.
+- Queue processing has bounded retries and dead-letter state. Active workers renew owner-checked leases while handlers run; a lost lease is audited and stale results are not committed. External dead-letter alert delivery, idempotency validation, and PostgreSQL multi-worker load/concurrency testing remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
 
 ## Authentication and administration
 
 Set these only in a server-side secret manager:
 
-- NEXUS_API_TOKEN: bearer token for agent discovery and task APIs.
-- NEXUS_API_CLIENT_ID: stable server-configured principal ID for that token (default api-client).
-- NEXUS_ADMIN_TOKEN: separate administrator bearer token.
-- NEXUS_ADMIN_ID: server-configured reviewer identity.
+- `NEXUS_API_TOKEN`: bearer token for agent discovery and task APIs.
+- `NEXUS_API_CLIENT_ID`: stable server-configured principal ID (default `api-client`).
+- `NEXUS_ADMIN_TOKEN`: separate administrator bearer token.
+- `NEXUS_ADMIN_ID`: server-configured reviewer identity.
 
-The current API token model supports one configured API principal, not a multi-user token directory, token rotation service, or per-user account management. Protected routes fail closed when required secrets are missing.
+The current token model supports one configured API principal, not multi-user identity, per-token hashing, or token rotation. Protected routes fail closed when required secrets are missing.
 
 ## API
 
-- GET /health
-- GET /agents
-- POST /tasks
-- POST /tasks/queued
-- GET /tasks/{task_id}
-- POST /approvals/{approval_id}/decision (administrator only)
-- GET /audit?limit=100 (administrator only; maximum 500)
+- `GET /health`
+- `GET /agents`
+- `POST /tasks`
+- `POST /tasks/queued`
+- `GET /tasks/{task_id}`
+- `POST /approvals/{approval_id}/decision` (administrator only)
+- `GET /audit?limit=100` (administrator only)
+- `GET /admin/queue` (administrator only; aggregate counts only)
+- `POST /knowledge/sources` (administrator only)
+- `GET /knowledge/search` (authenticated)
+- `POST /research/backtests/run` (authenticated; research-only)
 
-## Known limitations and next gates
+## Deployment status and remaining gates
 
-- ICT remains disabled until a reviewed handler, permission grants, schema tests, and deployment controls exist.
-- No live web research, market-data integration, MT5, broker credentials, order execution, or position management.
-- The worker lifecycle is implemented but no worker process is deployed or continuously supervised.
-- No production multi-user identity provider, per-token hashing/rotation, rate limiting, OPA, Vault, Redis, Temporal, or pgvector.
-- No cloud deployment or control-panel website has been provisioned.
-- The system is not production-ready. Do not expose it publicly before deployment hardening and independent security review.
+This repository is not yet a production deployment. No cloud host, production identity provider, managed secret rotation, distributed rate limiter, queue alert delivery, backup/restore drill, or independent security review has been completed. The worker is opt-in and not activated by the default Compose profile. Do not expose it publicly before deployment hardening and independent security review.
 
 ## Local development
 
@@ -85,3 +79,20 @@ pip install pytest
 uvicorn app.main:app --reload
 pytest -q
 ```
+
+## Strategy research and historical market data
+
+- Strategy specifications are schema-validated and immutable; lifecycle transitions require deterministic evidence gates and are centrally audited.
+- Research experiment plans are immutable and schema-validated.
+- Historical OHLC CSV datasets are imported with strict bounds, timestamp/price validation, quality reporting, SHA-256 identity, and immutable storage. Dataset reads are paginated.
+- Research and market-data APIs are authenticated; writes require the administrator role. Demo promotion remains disabled and no broker/live execution capability is introduced.
+
+### APIs
+
+- `POST /strategies/{strategy_id}/versions` and `GET /strategies/{strategy_id}/versions/{version}`
+- `POST /strategies/{strategy_id}/versions/{version}/transitions` and `GET /strategies/{strategy_id}/versions/{version}/transitions`
+- `POST /research/experiments` and `GET /research/experiments/{experiment_id}`
+- `POST /market-data/datasets` (multipart CSV; maximum 5 MiB and 10,000 rows)
+- `GET /market-data/datasets/{dataset_id}` and `GET /market-data/datasets/{dataset_id}/candles`
+
+Market datasets are research inputs only. Backtest or lifecycle evidence cannot authorize demo or live trading.

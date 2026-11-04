@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus-ai-core/schemas/backtest-result.schema.json",
+  "title": "NEXUS Backtest Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "experiment_id",
+    "strategy_id",
+    "strategy_version",
+    "status",
+    "reproducibility",
+    "data_quality",
+    "period",
+    "trade_statistics",
+    "performance",
+    "risk",
+    "breakdowns",
+    "robustness",
+    "artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "experiment_id": {
+      "type": "string"
+    },
+    "strategy_id": {
+      "type": "string"
+    },
+    "strategy_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "rejected_data_quality",
+        "cancelled"
+      ]
+    },
+    "reproducibility": {
+      "type": "object",
+      "required": [
+        "engine_version",
+        "code_revision",
+        "dataset_id",
+        "dataset_version",
+        "configuration_hash"
+      ],
+      "properties": {
+        "engine_version": {
+          "type": "string"
+        },
+        "code_revision": {
+          "type": "string"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "dataset_version": {
+          "type": "string"
+        },
+        "configuration_hash": {
+          "type": "string"
+        },
+        "random_seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "data_quality": {
+      "type": "object",
+      "required": [
+        "passed",
+        "missing_bars",
+        "duplicate_bars",
+        "stale_segments",
+        "warnings"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "missing_bars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_bars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stale_segments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "period": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "partition"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "partition": {
+          "enum": [
+            "train",
+            "validation",
+            "holdout",
+            "walk_forward",
+            "demo"
+          ]
+        }
+      }
+    },
+    "trade_statistics": {
+      "type": "object",
+      "required": [
+        "trade_count",
+        "wins",
+        "losses",
+        "breakeven",
+        "win_rate"
+      ],
+      "properties": {
+        "trade_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wins": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "losses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "breakeven": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "average_holding_time_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "performance": {
+      "type": "object",
+      "required": [
+        "net_profit",
+        "profit_factor",
+        "expectancy_r",
+        "average_r",
+        "gross_profit",
+        "gross_loss"
+      ],
+      "properties": {
+        "net_profit": {
+          "type": "number"
+        },
+        "profit_factor": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "expectancy_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "average_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gross_profit": {
+          "type": "number"
+        },
+        "gross_loss": {
+          "type": "number"
+        },
+        "annualized_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "required": [
+        "max_drawdown",
+        "max_drawdown_duration_seconds",
+        "largest_loss",
+        "consecutive_losses"
+      ],
+      "properties": {
+        "max_drawdown": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_drawdown_duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "largest_loss": {
+          "type": "number"
+        },
+        "consecutive_losses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exposure_time_ratio": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "breakdowns": {
+      "type": "object",
+      "required": [
+        "by_session",
+        "by_timeframe",
+        "by_direction"
+      ],
+      "properties": {
+        "by_session": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "by_timeframe": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "by_direction": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "robustness": {
+      "type": "object",
+      "required": [
+        "spread_sensitivity",
+        "slippage_sensitivity",
+        "parameter_stability",
+        "walk_forward_summary",
+        "overfitting_flags"
+      ],
+      "properties": {
+        "spread_sensitivity": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "slippage_sensitivity": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "parameter_stability": {
+          "type": "object"
+        },
+        "walk_forward_summary": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "overfitting_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "trades_uri",
+        "equity_curve_uri",
+        "logs_uri"
+      ],
+      "properties": {
+        "trades_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "equity_curve_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "logs_uri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

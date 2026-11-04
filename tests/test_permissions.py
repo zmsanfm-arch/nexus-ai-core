@@ -50,7 +50,7 @@ def test_non_advisory_mode_is_denied():
 
 
 
-def test_forex_permission_requests_are_not_implicit_grants():
+def test_forex_read_permissions_are_explicitly_granted():
     from app.services.registry import AgentRegistry
 
     agent = AgentRegistry().get("ict_mentor")
@@ -59,6 +59,5 @@ def test_forex_permission_requests_are_not_implicit_grants():
         "user_input.read",
         "chart_attachment.read",
     ]
-    assert agent["permissions"] == []
-    with pytest.raises(PermissionDenied, match="not been granted"):
-        PermissionService().authorize(agent, "ict.chart_analysis")
+    assert agent["permissions"] == ["knowledge.retrieve", "user_input.read", "chart_attachment.read"]
+    assert PermissionService().authorize(agent, "ict.chart_analysis") == "chart_attachment.read"

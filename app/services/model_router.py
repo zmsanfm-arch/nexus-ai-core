@@ -1,5 +1,7 @@
+import math
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -21,12 +23,42 @@ class ModelProviderError(RuntimeError):
     pass
 
 
+def _validate_model_config(config: ModelConfig) -> None:
+    try:
+        parsed = urlsplit(config.base_url)
+        hostname = (parsed.hostname or "").lower()
+        # Accessing .port also validates malformed/out-of-range port values.
+        _ = parsed.port
+    except ValueError:
+        raise ValueError("Model provider URL is invalid.") from None
+
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    local_http = parsed.scheme == "http" and hostname in local_hosts
+    if (
+        not hostname
+        or parsed.scheme != "https" and not local_http
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "Model provider URL must use HTTPS; HTTP is allowed only for localhost."
+        )
+    if not config.api_key.strip() or not config.model_name.strip():
+        raise ValueError("Model API key and model name are required.")
+    if not math.isfinite(config.timeout_seconds) or not 1 <= config.timeout_seconds <= 120:
+        raise ValueError("Model timeout must be between 1 and 120 seconds.")
+
+
 class ModelRouter:
-    """OpenAI-compatible chat-completions adapter; credentials stay server-side."""
+    """OpenAI-compatible adapter; credentials remain server-side and require TLS."""
 
     def __init__(self, primary: ModelConfig | None = None, transport=None):
         self.primary = primary
         self.transport = transport
+        if primary is not None:
+            _validate_model_config(primary)
 
     @classmethod
     def from_env(cls):
@@ -35,13 +67,18 @@ class ModelRouter:
         model_name = os.getenv("MODEL_NAME", "").strip()
         if not (api_key and base_url and model_name):
             return cls()
-        return cls(ModelConfig(
-            provider=os.getenv("MODEL_PROVIDER", "openai-compatible"),
-            base_url=base_url,
-            model_name=model_name,
-            api_key=api_key,
-            timeout_seconds=float(os.getenv("MODEL_TIMEOUT_SECONDS", "45")),
-        ))
+        try:
+            timeout_seconds = float(os.getenv("MODEL_TIMEOUT_SECONDS", "45"))
+            config = ModelConfig(
+                provider=os.getenv("MODEL_PROVIDER", "openai-compatible"),
+                base_url=base_url,
+                model_name=model_name,
+                api_key=api_key,
+                timeout_seconds=timeout_seconds,
+            )
+            return cls(config)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid model provider configuration: {exc}") from None
 
     def select(self, task_type: str) -> ModelConfig | None:
         return self.primary
@@ -68,6 +105,7 @@ class ModelRouter:
             with httpx.Client(
                 timeout=config.timeout_seconds,
                 transport=self.transport,
+                follow_redirects=False,
             ) as client:
                 response = client.post(
                     f"{config.base_url}/chat/completions",
@@ -83,7 +121,6 @@ class ModelRouter:
         except ModelProviderError:
             raise
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:
-            # Do not expose provider response bodies, credentials, or request headers.
             raise ModelProviderError(
                 f"Model provider request failed ({type(exc).__name__})."
             ) from None

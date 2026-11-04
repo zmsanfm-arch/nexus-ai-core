@@ -1,6 +1,8 @@
 import json
 import uuid
 
+from app.agents.ict_mentor import ICTMentorHandler
+from app.services.knowledge_store import KnowledgeStoreAdapter
 from app.services.risk import classify_risk
 from app.services.model_router import ModelNotConfigured, ModelProviderError
 from app.services.agent_framework import AgentFramework, AgentContractError
@@ -19,7 +21,17 @@ class Orchestrator:
         self.storage = storage
         self.model_router = model_router
         self.agent_framework = AgentFramework(model_router, storage)
-        self.specialist_runtime = SpecialistRuntime(registry, storage)
+        # Specialists are injected by the core. They receive no tools, credentials,
+        # broker connection, or execution gateway.
+        knowledge_store = KnowledgeStoreAdapter(storage)
+        handlers = {
+            "ict_mentor": ICTMentorHandler(model_router=model_router, storage=knowledge_store),
+        }
+        self.specialist_runtime = SpecialistRuntime(
+            registry=registry,
+            storage=storage,
+            handlers=handlers,
+        )
 
     def submit(self, objective: str, task_type: str | None = None, context=None, principal_id: str = "api-client"):
         risk = classify_risk(objective)
@@ -67,6 +79,17 @@ class Orchestrator:
         except (ModelProviderError, AgentContractError) as exc:
             task["status"] = "failed"
             task["result"] = str(exc)
+        except Exception as exc:
+            # Never leave a task in "running" after a handler/storage/provider fault.
+            task["status"] = "failed"
+            task["result"] = f"Task execution failed ({type(exc).__name__})."
+            self.storage.append_audit({
+                "event": "task_execution_failed",
+                "task_id": task["id"],
+                "task_type": task_type,
+                "error_type": type(exc).__name__,
+                "principal_id": principal_id,
+            })
         self.storage.save_task(task)
         self.storage.append_audit({
             "event": "task_finished",
