@@ -163,10 +163,23 @@ def create_mission(
     principal_id: str = Depends(require_api_access),
 ):
     """Validate and persist a principal-owned mission definition; does not execute it."""
+    agents = {item["id"]: item for item in registry.list_agents()}
     try:
-        compile_mission(payload, {item["id"] for item in registry.list_agents()})
+        compile_mission(payload, set(agents))
     except MissionContractError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    for node in payload.nodes:
+        agent = agents[node.agent_id]
+        if agent.get("status") != "registered" or agent.get("mode") != "advisory":
+            raise HTTPException(
+                status_code=422,
+                detail=f"Agent is not enabled for advisory missions: {node.agent_id}",
+            )
+        if node.capability not in agent.get("capabilities", []):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Agent does not declare capability {node.capability}: {node.agent_id}",
+            )
     try:
         mission = mission_repository.create(
             payload.mission_id,
