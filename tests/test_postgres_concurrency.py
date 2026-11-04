@@ -32,8 +32,8 @@ def test_concurrent_postgres_workers_claim_each_task_at_most_once():
                     return claimed
                 claimed.append(lease["task_id"])
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            batches = list(pool.map(drain, range(8)))
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            batches = list(pool.map(drain, range(16)))
 
         flattened = [task_id for batch in batches for task_id in batch]
         assert len(flattened) == len(set(flattened))
