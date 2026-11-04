@@ -12,7 +12,7 @@ NEXUS AI CORE is the only runtime authority. Forex/ICT Mentor is a specialist ca
 - Only three read-oriented permissions are granted to this specialist: knowledge.retrieve, user_input.read, and chart_attachment.read. Core policy and manifest grant are both required.
 - Specialist output is validated against the strict central Pydantic contract. execution_result is structurally null; source claims must match central retrieval provenance; user rules must be explicitly confirmed.
 - Knowledge source ingestion is administrator-only. Search is authenticated and returns source ID, title, canonical URL, retrieval time, segment ID, and timestamp bounds.
-- Knowledge retrieval is a deterministic lexical baseline. It is not vector/semantic search and does not automatically crawl external sources.
+- Knowledge retrieval is deterministic indexed lexical search with Persian/Arabic Unicode normalization. It is not vector/semantic search and does not automatically crawl external sources.
 - Audit events record specialist invocation start, completion, failure, and permission denial.
 
 ## Explicitly not enabled
@@ -41,7 +41,8 @@ Backtesting remains research-only. It uses explicit trade intents and midpoint O
 
 ## Operational gaps
 
-- No cloud deployment or supervised worker process is configured.
+- Queue/lease and injectable worker lifecycle primitives exist, but no standalone worker entrypoint, approved production task handler, or supervised worker service is configured.
+- No cloud deployment is configured.
 - No production OIDC identity provider, distributed rate limiter, secret manager, or token rotation service is provisioned.
 - No approved ICT source corpus has been populated as part of this integration.
 - No MT5 Demo bridge is installed. No live trading is enabled.
