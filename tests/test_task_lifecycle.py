@@ -10,7 +10,7 @@ def test_worker_claims_and_completes_task_with_audit():
         "Run a bounded research task", principal_id="user-17"
     )
     worker = TaskWorker(
-        store, "worker-a", lambda item: {"summary": "done"}, lease_seconds=10
+        store, "worker-a", lambda item: {"summary": "done", "audit_verdict": "pass"}, lease_seconds=10
     )
 
     assert worker.run_once() is True
