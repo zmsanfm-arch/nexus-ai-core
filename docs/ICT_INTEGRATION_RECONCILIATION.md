@@ -68,7 +68,7 @@ Exact-head CI for every open PR in the stack is green as of 2026-11-04:
 
 - PRs #2–#7 and #9–#14: Python test jobs passed.
 - PR #15: Python 3.11/3.12 tests and container build/health smoke passed.
-- PR #1 at `a8d0c115cdf6859d2bc08212ceb91346fa260858`: Python 3.11/3.12 tests and container build/health smoke passed (CI run #344, `41889812168`).
+- PR #1 at `ca25ad3dd5e31fa886843548ebe92952e45a4f44`: Python 3.11/3.12 tests, container build, PostgreSQL backup/restore drill and research API security tests passed (CI run #390, `41892817848`).
 
 PR #1's earlier run failed on an overlong Alembic revision identifier and stale migration-head assertions. Both were corrected; the latest exact-head run passed. GitHub currently reports all open stack PRs mergeable. A green CI run is not a security review or production release approval.
 
