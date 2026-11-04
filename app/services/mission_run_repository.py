@@ -129,6 +129,12 @@ class MissionRunRepository:
             ))
             return self._serialize(record, session) if record else None
 
+    def get_for_worker(self, run_id: str) -> dict | None:
+        """Internal worker read; API callers must use principal-scoped get()."""
+        with self.storage.sessions() as session:
+            record = session.get(MissionRunRecord, run_id)
+            return self._serialize(record, session) if record else None
+
     def claim_next(self, worker_id: str, lease_seconds: int = 600) -> dict | None:
         if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
             raise ValueError("Invalid worker identity or lease duration.")
