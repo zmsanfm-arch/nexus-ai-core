@@ -12,6 +12,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
+COPY scripts ./scripts
 COPY agents ./agents
 COPY docs ./docs
 RUN mkdir -p /app/data && chown -R nexus:nexus /app
