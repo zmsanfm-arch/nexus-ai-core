@@ -27,8 +27,7 @@ class GovernanceService:
             "status": "pending",
             "reviewer": None,
         }
-        self.storage.save_approval(approval)
-        self.storage.append_audit({
+        self.storage.create_approval_with_audit(approval, {
             "event": "approval_requested",
             "approval_id": approval["id"],
             "action_type": action_type,
@@ -37,18 +36,4 @@ class GovernanceService:
         return approval
 
     def decide(self, approval_id: str, approved: bool, reviewer: str):
-        item = self.storage.get_approval(approval_id)
-        if not item:
-            raise KeyError(approval_id)
-        if item["status"] != "pending":
-            raise ValueError("Approval is already resolved")
-        item["status"] = "approved" if approved else "rejected"
-        item["reviewer"] = reviewer
-        self.storage.save_approval(item)
-        self.storage.append_audit({
-            "event": "approval_decided",
-            "approval_id": approval_id,
-            "decision": item["status"],
-            "reviewer": reviewer,
-        })
-        return item
+        return self.storage.decide_approval_with_audit(approval_id, approved, reviewer)
