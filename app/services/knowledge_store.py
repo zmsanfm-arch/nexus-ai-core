@@ -1,16 +1,11 @@
-"""Central, provenance-preserving knowledge storage adapter for specialists.
-
-Uses the NEXUS SQLAlchemy engine. Retrieval is lexical baseline, not semantic search.
-"""
+"""Central, provenance-preserving knowledge storage adapter for specialists."""
 from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from sqlalchemy import (
-    MetaData, Table, Column, String, Integer, DateTime, select, insert,
-)
+from sqlalchemy import MetaData, Table, Column, String, Integer, DateTime, select, insert
 
 metadata = MetaData()
 sources = Table(
@@ -46,7 +41,8 @@ class KnowledgeStoreAdapter:
 
     @staticmethod
     def _tokens(value: str) -> set[str]:
-        return set(re.findall(r"[a-z0-9_]{2,}", value.casefold()))
+        # Unicode-aware tokenization supports Persian and other non-Latin scripts.
+        return set(re.findall(r"[^\W_]{2,}", value.casefold(), flags=re.UNICODE))
 
     def save_knowledge_source(self, source: dict, source_chunks: list[dict]) -> None:
         parsed = urlparse(source.get("url", ""))
@@ -58,23 +54,22 @@ class KnowledgeStoreAdapter:
         retrieved_at = source.get("retrieved_at")
         if isinstance(retrieved_at, str):
             retrieved_at = datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
-        if not isinstance(retrieved_at, datetime) or retrieved_at.tzinfo is None:
+        if (not isinstance(retrieved_at, datetime) or retrieved_at.tzinfo is None
+                or retrieved_at.utcoffset() is None):
             raise ValueError("retrieved_at must be timezone-aware")
         normalized = []
         seen = set()
         for item in source_chunks:
             ordinal = item.get("ordinal")
             text = item.get("text")
-            if not isinstance(ordinal, int) or ordinal < 0 or ordinal in seen:
+            if not isinstance(ordinal, int) or isinstance(ordinal, bool) or ordinal < 0 or ordinal in seen:
                 raise ValueError("Chunk ordinals must be unique non-negative integers")
             if not isinstance(text, str) or not text.strip() or len(text) > 12000:
                 raise ValueError("Chunk text must contain 1 to 12000 characters")
             seen.add(ordinal)
             normalized.append({
-                "id": f"{source_id}:{ordinal}",
-                "source_id": source_id,
-                "ordinal": ordinal,
-                "text": text,
+                "id": f"{source_id}:{ordinal}", "source_id": source_id,
+                "ordinal": ordinal, "text": text,
                 "timestamp_start": item.get("timestamp_start"),
                 "timestamp_end": item.get("timestamp_end"),
             })
@@ -100,13 +95,12 @@ class KnowledgeStoreAdapter:
     def search_knowledge(self, query: str, limit: int = 8) -> list[dict]:
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
             return []
-        if not isinstance(limit, int) or limit < 1 or limit > 20:
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1 or limit > 20:
             raise ValueError("Knowledge search limit must be between 1 and 20")
         if self.engine is None:
             rows = []
             for chunk in self._memory_chunks:
-                source = self._memory_sources[chunk["source_id"]]
-                rows.append({**chunk, **source})
+                rows.append({**chunk, **self._memory_sources[chunk["source_id"]]})
         else:
             statement = (
                 select(
@@ -114,8 +108,7 @@ class KnowledgeStoreAdapter:
                     chunks.c.ordinal, chunks.c.text, chunks.c.timestamp_start,
                     chunks.c.timestamp_end, sources.c.title, sources.c.url,
                     sources.c.source_type, sources.c.usage_basis, sources.c.retrieved_at,
-                )
-                .select_from(chunks.join(sources, chunks.c.source_id == sources.c.id))
+                ).select_from(chunks.join(sources, chunks.c.source_id == sources.c.id))
             )
             with self.engine.connect() as connection:
                 rows = [dict(row._mapping) for row in connection.execute(statement)]
@@ -124,8 +117,7 @@ class KnowledgeStoreAdapter:
             return []
         ranked = []
         for row in rows:
-            body_terms = self._tokens(row["text"])
-            score = len(terms & body_terms)
+            score = len(terms & self._tokens(row["text"]))
             if score:
                 retrieved = row["retrieved_at"]
                 if isinstance(retrieved, datetime):
@@ -133,16 +125,12 @@ class KnowledgeStoreAdapter:
                         retrieved = retrieved.replace(tzinfo=timezone.utc)
                     retrieved = retrieved.isoformat()
                 ranked.append((score, {
-                    "source_id": row["source_id"],
-                    "title": row["title"],
-                    "url": row["url"],
-                    "retrieved_at": retrieved,
+                    "source_id": row["source_id"], "title": row["title"],
+                    "url": row["url"], "retrieved_at": retrieved,
                     "segment_id": row.get("segment_id") or row["id"],
-                    "text": row["text"],
-                    "timestamp_start": row.get("timestamp_start"),
+                    "text": row["text"], "timestamp_start": row.get("timestamp_start"),
                     "timestamp_end": row.get("timestamp_end"),
-                    "source_type": row.get("source_type"),
-                    "usage_basis": row.get("usage_basis"),
+                    "source_type": row.get("source_type"), "usage_basis": row.get("usage_basis"),
                 }))
         ranked.sort(key=lambda item: (-item[0], item[1]["source_id"], item[1]["segment_id"]))
         return [item for _, item in ranked[:limit]]
