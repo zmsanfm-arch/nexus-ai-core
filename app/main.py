@@ -108,6 +108,12 @@ def list_audit(
     return {"events": store.list_audit(limit=limit)}
 
 
+@app.get("/admin/queue")
+def queue_status(reviewer_id: str = Depends(require_admin)):
+    """Expose aggregate queue state to administrators without task payloads or errors."""
+    return {"queue": store.queue_summary()}
+
+
 @app.post("/approvals/{approval_id}/decision")
 def decide_approval(
     approval_id: str,
