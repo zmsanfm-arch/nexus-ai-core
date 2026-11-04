@@ -57,7 +57,7 @@ class KnowledgeStoreAdapter:
             if unicodedata.category(char) not in {"Mn", "Me", "Cf"}
         ).casefold()
         return {
-            token for token in re.findall(r"[^\\W_]{2,}", value, flags=re.UNICODE)
+            token for token in re.findall(r"[^\W_]{2,}", value, flags=re.UNICODE)
             if len(token) <= 128
         }
 
