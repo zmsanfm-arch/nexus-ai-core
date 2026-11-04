@@ -40,7 +40,7 @@ Without the required model settings, model-dependent tasks return blocked; they 
 - `GET /tasks/{task_id}` returns a task only to its owning API principal.
 - Worker lifecycle includes a standalone `python -m app.worker_entrypoint` process and an opt-in supervised Compose service (`--profile worker`). The generic worker only accepts `general` tasks; unregistered specialist and execution task types fail closed. The service requires an explicitly approved and configured model provider.
 - Non-pass or missing auditor verdicts leave the business task blocked even when queue processing completes. Queue state is visible through admin-only `GET /admin/queue`, which returns aggregate counts only.
-- Queue processing has bounded retries and dead-letter state. Lease renewal/heartbeat, external alert delivery, and multi-worker load/concurrency validation remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
+- Queue processing has bounded retries and dead-letter state. Active workers renew owner-checked leases while handlers run; a lost lease is audited and stale results are not committed. External dead-letter alert delivery, idempotency validation, and PostgreSQL multi-worker load/concurrency testing remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
 
 ## Authentication and administration
 
