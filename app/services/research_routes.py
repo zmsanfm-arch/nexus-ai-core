@@ -91,6 +91,8 @@ def register_research_routes(app, storage, require_api_access, require_admin):
         if data.get("strategy_id") != strategy_id:
             raise HTTPException(status_code=422, detail="strategy_id in payload must match URL")
         _validate_contract("strategy.schema.json", data)
+        if data.get("status") != "draft":
+            raise HTTPException(status_code=422, detail="New strategy versions must start in draft")
         if not isinstance(data.get("version"), str) or len(data["version"]) > 32:
             raise HTTPException(status_code=422, detail="Strategy version must not exceed 32 characters")
         try:
