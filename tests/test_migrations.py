@@ -65,3 +65,21 @@ def test_postgres_migrations_and_concurrent_queue_claims():
         assert len(set(claimed_ids)) == 2
     finally:
         store.close()
+
+
+
+def test_skip_migrations_requires_database_at_exact_head(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'verified.db'}"
+    migrated = SQLAlchemyStore(url)
+    migrated.close()
+
+    monkeypatch.setenv("NEXUS_SKIP_MIGRATIONS", "true")
+    verified = SQLAlchemyStore(url)
+    verified.close()
+
+
+def test_skip_migrations_fails_closed_for_unmigrated_database(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'unmigrated.db'}"
+    monkeypatch.setenv("NEXUS_SKIP_MIGRATIONS", "true")
+    with pytest.raises(RuntimeError, match="migration verification failed|not at the application migration head"):
+        SQLAlchemyStore(url)
