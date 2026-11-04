@@ -36,8 +36,6 @@ class KnowledgeStoreAdapter:
         self.engine = getattr(storage, "engine", None)
         self._memory_sources = {}
         self._memory_chunks = []
-        if self.engine is not None:
-            metadata.create_all(self.engine)
 
     @staticmethod
     def _tokens(value: str) -> set[str]:
