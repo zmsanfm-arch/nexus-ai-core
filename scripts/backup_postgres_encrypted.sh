@@ -19,7 +19,7 @@ trap 'rm -f "$tmp"' EXIT
 pg_dump --format=custom --no-owner --no-acl "$DATABASE_URL" | age --encrypt --recipient "$AGE_RECIPIENT" --output "$tmp"
 test -s "$tmp"
 mv -- "$tmp" "$final"
-sha256sum "$final" > "$final.sha256"
+(cd "$BACKUP_DIR" && sha256sum "$(basename "$final")" > "$(basename "$final").sha256")
 chmod 600 "$final" "$final.sha256"
 printf 'Encrypted backup created: %s\n' "$final"
 printf 'SHA-256: '

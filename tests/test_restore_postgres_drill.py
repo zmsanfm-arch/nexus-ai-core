@@ -39,3 +39,23 @@ def test_restore_refuses_non_isolated_database_even_when_url_is_allowlisted(tmp_
     result = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
     assert result.returncode == 2
     assert "must start with nexus_restore_" in result.stderr
+
+
+def test_restore_requires_checksum_sidecar_before_decryption(tmp_path):
+    url = "postgresql://restore@staging.example/nexus_restore_drill"
+    env = _base_env(tmp_path, url, url)
+    result = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
+    assert result.returncode == 2
+    assert "Backup checksum sidecar is required" in result.stderr
+
+
+def test_restore_rejects_checksum_mismatch_before_decryption(tmp_path):
+    url = "postgresql://restore@staging.example/nexus_restore_drill"
+    env = _base_env(tmp_path, url, url)
+    backup = Path(env["BACKUP_FILE"])
+    (backup.parent / (backup.name + ".sha256")).write_text(
+        "0" * 64 + "  " + backup.name + "\n", encoding="utf-8"
+    )
+    result = subprocess.run([ "bash", str(SCRIPT)], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "FAILED" in result.stdout
