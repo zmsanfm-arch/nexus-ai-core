@@ -16,7 +16,7 @@ def test_worker_claims_and_completes_task_with_audit():
     assert worker.run_once() is True
     saved = store.get_task(task["id"])
     assert saved["status"] == "completed"
-    assert saved["result"] == {"summary": "done"}
+    assert saved["result"] == {"summary": "done", "audit_verdict": "pass"}
     assert store.queue[task["id"]]["status"] == "completed"
     assert any(e["event"] == "task_worker_completed" for e in store.audit)
     assert worker.run_once() is False
@@ -83,3 +83,15 @@ def test_worker_records_nonpass_auditor_verdict_as_blocked_task():
     event = [item for item in store.audit if item["event"] == "task_worker_completed"][-1]
     assert event["task_status"] == "blocked"
     assert event["audit_verdict"] == "revise"
+
+
+def test_worker_fails_closed_when_handler_omits_auditor_verdict():
+    store = InMemoryStore()
+    task = TaskQueueService(store).enqueue("Run a task without an auditor verdict")
+    worker = TaskWorker(
+        store, "worker-no-verdict", lambda item: {"summary": "unreviewed"}, lease_seconds=10
+    )
+
+    assert worker.run_once() is True
+    assert store.get_task(task["id"])["status"] == "blocked"
+    assert store.queue[task["id"]]["status"] == "completed"
