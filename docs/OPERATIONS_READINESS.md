@@ -83,6 +83,7 @@ Create a disposable PostgreSQL database whose name starts with `nexus_restore_`.
 BACKUP_FILE=/var/backups/nexus/nexus-YYYYMMDDTHHMMSSZ.dump.age \
 AGE_IDENTITY_FILE=/secure/offline/backup-identity.txt \
 NEXUS_RESTORE_DATABASE_URL='postgresql://.../nexus_restore_drill' \
+NEXUS_RESTORE_ALLOWED_DATABASE_URL='postgresql://.../nexus_restore_drill' \
 NEXUS_RESTORE_CONFIRM=YES ./scripts/restore_postgres_drill.sh
 ```
 
