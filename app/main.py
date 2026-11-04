@@ -1,4 +1,5 @@
 import hmac
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 import os
 from urllib.parse import urlparse
@@ -20,10 +21,20 @@ from app.schemas import BacktestRunCreate
 from app.backtesting.engine import Candle, TradeIntent, ExecutionCosts, BacktestConfig, run_backtest
 from app.backtesting.evaluator import evaluate_trades, evaluate_acceptance
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    errors = validate_production_environment()
+    if errors:
+        # Error messages contain setting names only, never configured secret values.
+        raise RuntimeError("Production configuration rejected: " + "; ".join(errors))
+    yield
+
+
 app = FastAPI(
     title="NEXUS AI CORE",
     version="0.2.0",
     description="Autonomous multi-agent system foundation",
+    lifespan=lifespan,
 )
 
 principal_rate_limiter = PrincipalRateLimiter()
@@ -85,14 +96,6 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
-
-
-@app.on_event("startup")
-def production_preflight():
-    errors = validate_production_environment()
-    if errors:
-        # Error messages contain setting names only, never configured secret values.
-        raise RuntimeError("Production configuration rejected: " + "; ".join(errors))
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
