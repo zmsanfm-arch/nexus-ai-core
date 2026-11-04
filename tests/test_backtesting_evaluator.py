@@ -110,3 +110,9 @@ def test_acceptance_rejects_malformed_thresholds():
         evaluate_acceptance(evaluation, {"minimum_profit_factor": float("nan")})
     with pytest.raises(ValueError, match="boolean"):
         evaluate_acceptance(evaluation, {"robustness_required": "yes"})
+
+
+def test_acceptance_validates_threshold_even_when_metric_is_unevaluable():
+    evaluation = evaluate_trades([trade("winner", 10, 1)], 100)
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_acceptance(evaluation, {"minimum_profit_factor": float("nan")})
