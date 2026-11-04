@@ -56,7 +56,7 @@ services:
       NEXUS_WORKER_MAX_ATTEMPTS: ${NEXUS_WORKER_MAX_ATTEMPTS:-3}
       NEXUS_WORKER_RETRY_DELAY_SECONDS: ${NEXUS_WORKER_RETRY_DELAY_SECONDS:-30}
     depends_on:
-      postgres:
+      api:
         condition: service_healthy
     read_only: true
     tmpfs:
@@ -65,6 +65,7 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
     networks: [backend]
+    # Wait for API startup/migrations before importing the shared SQL store.
     # Worker has no published ports. Only general advisory tasks are enabled.
 
 volumes:
