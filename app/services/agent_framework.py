@@ -118,10 +118,10 @@ class AgentFramework:
     def run(self, task_id: str, objective: str) -> dict:
         specs = {spec.agent_id: spec for spec in AGENTS}
         plan = build_workflow_plan((
-            WorkflowNode("research", "research"),
-            WorkflowNode("analysis", "analysis", ("research",)),
-            WorkflowNode("audit", "auditor", ("analysis",)),
-        ), max_nodes=3, max_total_attempts=3)
+            WorkflowNode("research", "research", max_attempts=1),
+            WorkflowNode("analysis", "analysis", ("research",), max_attempts=1 + MAX_REVISION_ROUNDS),
+            WorkflowNode("audit", "auditor", ("analysis",), max_attempts=1 + MAX_REVISION_ROUNDS),
+        ), max_nodes=3, max_total_attempts=MAX_TOTAL_AGENT_ATTEMPTS)
 
         outputs = {}
         for node in plan.ordered_nodes:
