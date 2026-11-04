@@ -4,14 +4,14 @@
 
 ## Current Railway deployment evidence (2026-11-04)
 
-- Main release commit: `6d3293b1b58be7a5a37f07de27dc6d212b2d3538`.
-- Railway API deployment: `0bec6b64-f828-4615-8dfc-8f1fd9e5ead7`; state `SUCCESS`, one replica online.
+- Main release commit: `111edb6fbae59ad1044b3252609304a11f7e49cf`.
+- Railway API deployment: `8057f6d0-c118-4af6-b045-311b401a1aa0`; state `SUCCESS`, one replica online.
 - Railway API service: `nexus-api`; production environment has no public or custom domain attached. DNS/TLS and external firewall verification are operator-owned.
 - The pre-deploy release command is `python scripts/migrate_release.py`. It requires a PostgreSQL `DATABASE_URL`, sets migration flags before importing the application store, runs Alembic explicitly, and performs a database round-trip check.
 - Deployment logs confirm `PostgresqlImpl`, successful upgrades through the current migration chain, application startup, and `GET /ready` returning `200 OK`. API startup uses `NEXUS_SKIP_MIGRATIONS=true` and fails closed unless the database is at the exact migration head.
-- CI run 438 passed on PR #23 candidate SHA `bb84faa3179edfb0abd73d077b14600b03d1c560`: Python 3.11 and 3.12 tests, PostgreSQL 16 queue concurrency tests (16 workers / 256 tasks), container build and health smoke test, dependency audit, Bandit, and encrypted PostgreSQL backup/restore drill against disposable CI databases. CI run 437 also passed after upgrading checkout/setup-python actions to Node 24-compatible releases.
-- Authenticated API and administrator principals have separate in-process fixed-window limits: 600 API requests/minute and 300 admin requests/minute by default. `/health` and `/ready` are exempt. Railway is configured with one API replica; this limiter is not shared across replicas.
-- PRs #1–#7 and #9–#23 are merged. PR #8 is closed as superseded. The current production deployment is the merged mainline, not an unmerged draft.
+- CI run 443 passed on PR #25 candidate SHA `db9e023d8998d85ccf4cd79adf0fecb853cdad79`: 169 tests on Python 3.11 and 3.12, PostgreSQL 16 queue concurrency tests (16 workers / 256 tasks), container build and health smoke test, dependency audit, Bandit, and encrypted PostgreSQL backup/restore drill against disposable CI databases. CI uses Node 24-compatible checkout/setup-python actions. Remaining test warnings are third-party Starlette/httpx TestClient deprecations.
+- Authenticated API and administrator principals have separate in-process fixed-window limits: 600 API requests/minute and 300 admin requests/minute by default. `/health` and `/ready` are exempt. Railway is configured with one API replica; this limiter is not shared across replicas. Invalid credentials are not throttled by this middleware and require an edge-level control before public exposure.
+- PRs #1–#7 and #9–#25 are merged. PR #8 is closed as superseded. The current production deployment is the merged mainline, not an unmerged draft.
 - Railway recorded earlier failed deployments while the migration release path was being corrected. The latest deployment is successful and has no active warning/critical notifications; historical failures remain visible in Railway's recent-failure window.
 - CI restore evidence is not a production backup schedule, off-host retention, or production-host restore test. Do not claim production RPO/RTO until measured.
 
