@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, create_engine, select
+from sqlalchemy import DateTime, Integer, String, create_engine, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
 
@@ -186,6 +186,18 @@ class SQLAlchemyStore:
             return {"task_id": record.task_id, "attempts": record.attempts,
                     "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
 
+    def queue_summary(self):
+        with self.sessions() as session:
+            rows = session.execute(
+                select(TaskQueueRecord.status, func.count())
+                .group_by(TaskQueueRecord.status)
+            ).all()
+        summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+        for status, count in rows:
+            summary[status] = int(count)
+        summary["total"] = sum(summary.values())
+        return summary
+
     def complete_queued_task(self, task_id: str, worker_id: str):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
 
@@ -311,6 +323,14 @@ class InMemoryStore:
             item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
             item["updated_at"] = now
             return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
+
+    def queue_summary(self):
+        with self._lock:
+            summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+            for item in self.queue.values():
+                summary[item["status"]] = summary.get(item["status"], 0) + 1
+            summary["total"] = sum(summary.values())
+            return summary
 
     def complete_queued_task(self, task_id, worker_id):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
