@@ -50,7 +50,7 @@ class TaskQueueRecord(Base):
 
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
-    def __init__(self, database_url: str | None = None):
+    def __init__(self, database_url: str | None = None, run_migrations: bool = True):
         url = database_url or os.getenv("DATABASE_URL", "sqlite:///./data/nexus.db")
         if url.startswith("sqlite:///"):
             db_path = url.removeprefix("sqlite:///")
@@ -62,14 +62,27 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        self._run_migrations()
+        if run_migrations:
+            self._run_migrations()
 
     def _run_migrations(self):
         from alembic import command
         from alembic.config import Config
+        from alembic.migration import MigrationContext
+        from alembic.script import ScriptDirectory
 
         config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
         config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False).replace("%", "%%"))
+        if os.getenv("NEXUS_SKIP_MIGRATIONS", "").strip().lower() in {"1", "true", "yes"}:
+            try:
+                with self.engine.connect() as connection:
+                    current = MigrationContext.configure(connection).get_current_revision()
+                expected = ScriptDirectory.from_config(config).get_current_head()
+            except Exception as exc:
+                raise RuntimeError("Database migration verification failed; run the dedicated migration release job.") from exc
+            if not expected or current != expected:
+                raise RuntimeError("Database schema is not at the application migration head; run the dedicated migration release job.")
+            return
         with self.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
@@ -168,7 +181,9 @@ class SQLAlchemyStore:
         if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
             raise ValueError("Invalid worker identity or lease duration.")
         now = datetime.now(timezone.utc)
-        with self._lock, self.sessions.begin() as session:
+        # PostgreSQL row-level SKIP LOCKED is the concurrency primitive here.
+        # Do not serialize independent worker claims behind a process-local mutex.
+        with self.sessions.begin() as session:
             query = (
                 select(TaskQueueRecord)
                 .where(
@@ -191,6 +206,27 @@ class SQLAlchemyStore:
             record.updated_at = now
             return {"task_id": record.task_id, "attempts": record.attempts,
                     "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
+
+    def renew_queued_task_lease(self, task_id: str, worker_id: str, lease_seconds: int) -> bool:
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.task_id == task_id,
+                    TaskQueueRecord.status == "leased",
+                    TaskQueueRecord.lease_owner == worker_id,
+                    TaskQueueRecord.lease_expires_at > now,
+                )
+                .with_for_update()
+            )
+            if record is None:
+                return False
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return True
 
     def queue_summary(self):
         with self.sessions() as session:
@@ -334,6 +370,22 @@ class InMemoryStore:
             item["updated_at"] = now
             return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
 
+    def renew_queued_task_lease(self, task_id, worker_id, lease_seconds):
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (
+                item is None or item["status"] != "leased"
+                or item["lease_owner"] != worker_id
+                or item["lease_expires_at"] <= now
+            ):
+                return False
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return True
+
     def queue_summary(self):
         with self._lock:
             summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
@@ -383,4 +435,4 @@ class InMemoryStore:
 
 
 # Application default: durable SQL storage. InMemoryStore remains test-only.
-store = SQLAlchemyStore()
+store = SQLAlchemyStore(run_migrations=os.getenv("NEXUS_MIGRATION_COMMAND", "").strip().lower() not in {"1", "true", "yes"})

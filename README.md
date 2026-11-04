@@ -40,7 +40,7 @@ Without the required model settings, model-dependent tasks return blocked; they 
 - `GET /tasks/{task_id}` returns a task only to its owning API principal.
 - Worker lifecycle includes a standalone `python -m app.worker_entrypoint` process and an opt-in supervised Compose service (`--profile worker`). The generic worker only accepts `general` tasks; unregistered specialist and execution task types fail closed. The service requires an explicitly approved and configured model provider.
 - Non-pass or missing auditor verdicts leave the business task blocked even when queue processing completes. Queue state is visible through admin-only `GET /admin/queue`, which returns aggregate counts only.
-- Queue processing has bounded retries and dead-letter state. Lease renewal/heartbeat, external alert delivery, and multi-worker load/concurrency validation remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
+- Queue processing has bounded retries and dead-letter state. Active workers renew owner-checked leases while handlers run; a lost lease is audited and stale results are not committed. External dead-letter alert delivery, idempotency validation, and PostgreSQL multi-worker load/concurrency testing remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
 
 ## Authentication and administration
 
@@ -79,3 +79,20 @@ pip install pytest
 uvicorn app.main:app --reload
 pytest -q
 ```
+
+## Strategy research and historical market data
+
+- Strategy specifications are schema-validated and immutable; lifecycle transitions require deterministic evidence gates and are centrally audited.
+- Research experiment plans are immutable and schema-validated.
+- Historical OHLC CSV datasets are imported with strict bounds, timestamp/price validation, quality reporting, SHA-256 identity, and immutable storage. Dataset reads are paginated.
+- Research and market-data APIs are authenticated; writes require the administrator role. Demo promotion remains disabled and no broker/live execution capability is introduced.
+
+### APIs
+
+- `POST /strategies/{strategy_id}/versions` and `GET /strategies/{strategy_id}/versions/{version}`
+- `POST /strategies/{strategy_id}/versions/{version}/transitions` and `GET /strategies/{strategy_id}/versions/{version}/transitions`
+- `POST /research/experiments` and `GET /research/experiments/{experiment_id}`
+- `POST /market-data/datasets` (multipart CSV; maximum 5 MiB and 10,000 rows)
+- `GET /market-data/datasets/{dataset_id}` and `GET /market-data/datasets/{dataset_id}/candles`
+
+Market datasets are research inputs only. Backtest or lifecycle evidence cannot authorize demo or live trading.
