@@ -83,9 +83,7 @@ class TaskWorker:
             # Queue execution can complete while the business task remains blocked
             # by the independent auditor gate.
             audit_verdict = result.get("audit_verdict")
-            task["status"] = (
-                "blocked" if audit_verdict in {"revise", "block"} else "completed"
-            )
+            task["status"] = "completed" if audit_verdict == "pass" else "blocked"
             task["completed_at"] = datetime.now(timezone.utc).isoformat()
             self.storage.save_task(task)
             self.storage.complete_queued_task(task_id, self.worker_id)
