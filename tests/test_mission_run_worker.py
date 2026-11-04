@@ -66,3 +66,59 @@ def test_worker_executes_and_checkpoints_dependency_order(tmp_path):
         assert all(node["attempts"] == 1 for node in snapshot["nodes"])
     finally:
         store.close()
+
+
+def test_worker_restart_resumes_after_durable_node_checkpoint(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.services.mission_run_repository import MissionQueueRecord
+
+    import app.services.mission_run_repository  # noqa: F401
+    database_url = f"sqlite:///{tmp_path / 'restart.db'}"
+    first_store = SQLAlchemyStore(database_url)
+    repository = MissionRunRepository(first_store)
+    mission = {
+        "mission_id": "demo_mission", "name": "Demo",
+        "objective": "Analyze supplied data",
+        "nodes": [
+            {"node_id": "research", "agent_id": "demo_agent",
+             "capability": "demo.read", "dependencies": [], "max_attempts": 2},
+            {"node_id": "analysis", "agent_id": "demo_agent",
+             "capability": "demo.read", "dependencies": ["research"], "max_attempts": 1},
+        ],
+        "max_total_attempts": 3,
+        "approval_policy": "required_for_external_actions",
+    }
+    run = repository.enqueue("demo_mission", "principal-a", "restart-test", mission)
+    repository.claim_next("worker-before-crash", lease_seconds=60)
+    repository.checkpoint_node(
+        run["run_id"], "worker-before-crash", "research", "completed",
+        output=Handler().run(None).model_dump(mode="json"), increment_attempt=True,
+    )
+    with first_store.sessions.begin() as session:
+        queue = session.get(MissionQueueRecord, run["run_id"])
+        queue.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    first_store.close()
+
+    # A fresh store/worker process resumes from the committed checkpoint.
+    restarted_store = SQLAlchemyStore(database_url)
+    try:
+        restarted_repository = MissionRunRepository(restarted_store)
+        worker = MissionRunWorker(
+            restarted_repository, Registry(), {"demo_agent": Handler()},
+            restarted_store, worker_id="worker-after-restart",
+            auditor=Auditor(),
+            permission_service=PermissionService(
+                capability_permissions={"demo.read": "demo.permission"},
+                allowed_permissions=frozenset({"demo.permission"}),
+            ),
+        )
+        assert worker.run_once() is True
+        snapshot = restarted_repository.get(run["run_id"], "principal-a")
+        assert snapshot["status"] == "completed"
+        states = {node["node_id"]: node for node in snapshot["nodes"]}
+        assert states["research"]["attempts"] == 1
+        assert states["analysis"]["attempts"] == 1
+        assert states["research"]["status"] == "completed"
+        assert states["analysis"]["status"] == "completed"
+    finally:
+        restarted_store.close()
