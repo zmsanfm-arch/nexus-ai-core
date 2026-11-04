@@ -11,6 +11,7 @@ from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.storage import store
+from app.production_config import validate_production_environment
 from app.services.task_lifecycle import TaskQueueService
 from app.services.knowledge_store import KnowledgeStoreAdapter
 from app.schemas import BacktestRunCreate
@@ -29,6 +30,14 @@ model_router = ModelRouter.from_env()
 orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
+
+
+@app.on_event("startup")
+def production_preflight():
+    errors = validate_production_environment()
+    if errors:
+        # Error messages contain setting names only, never configured secret values.
+        raise RuntimeError("Production configuration rejected: " + "; ".join(errors))
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
