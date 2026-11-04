@@ -7,6 +7,9 @@ a PostgreSQL DATABASE_URL, then runs the Alembic head migration explicitly.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
 from sqlalchemy.engine import make_url
 
 
@@ -32,6 +35,10 @@ def main() -> None:
         url.database,
         flush=True,
     )
+
+    project_root = str(Path(__file__).resolve().parents[1])
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
     from app.storage import SQLAlchemyStore
 
