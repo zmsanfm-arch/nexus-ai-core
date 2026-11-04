@@ -54,7 +54,7 @@ def test_postgres_migrations_and_concurrent_queue_claims():
     store = SQLAlchemyStore(os.environ["NEXUS_TEST_POSTGRES_URL"])
     try:
         with store.engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0004_missions"
 
         for task_id in ("pg-queue-1", "pg-queue-2"):
             store.enqueue_task({"id": task_id, "objective": "database concurrency test"})
@@ -65,7 +65,6 @@ def test_postgres_migrations_and_concurrent_queue_claims():
         assert len(set(claimed_ids)) == 2
     finally:
         store.close()
-
 
 
 def test_skip_migrations_requires_database_at_exact_head(tmp_path, monkeypatch):
