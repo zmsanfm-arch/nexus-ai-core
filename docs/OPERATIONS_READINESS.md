@@ -9,7 +9,7 @@
 - Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, and uses bounded retries/dead-letter handling. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
 - Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
-- `/health` is process liveness only. It does not prove database readiness, provider reachability, or worker health. Admin-only `GET /admin/queue` reports aggregate queued/leased/completed/dead counts without exposing task payloads or failure details.
+- `/health` is process liveness only. `/ready` executes `SELECT 1` against the configured database and returns HTTP 503 when persistence is unavailable. Neither endpoint proves provider reachability or worker health. Admin-only `GET /admin/queue` reports aggregate queued/leased/completed/dead counts without exposing task payloads or failure details.
 - Alembic migrations currently run during store initialization. Run exactly one API instance. Do not scale horizontally until migrations move to a dedicated release step with startup coordination.
 - Research backtests are not broker-grade and do not authorize trading.
 
@@ -88,7 +88,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; lease renewal before workloads can exceed the configured lease |
 | Migrations | Alembic at startup | Dedicated migration job/lock before multi-instance use |
 | Backups | Not provisioned | Automated encrypted backups and restore drills |
-| Observability | Process liveness plus admin-only aggregate queue counts | DB readiness, metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
+| Observability | Process liveness, database readiness (`/ready`), and admin-only aggregate queue counts | Metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
 | Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
 | Security assurance | CI only | Independent review, threat model, dependency/container scans |
