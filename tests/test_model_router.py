@@ -48,3 +48,31 @@ def test_provider_failure_does_not_leak_response_body():
         router.generate("system", "hello")
     assert "secret-token-invalid" not in str(error.value)
     assert "test-secret" not in str(error.value)
+
+
+@pytest.mark.parametrize('base_url', ['http://model.example/v1', 'https://user:password@model.example/v1', 'https://model.example/v1?token=unsafe'])
+def test_unsafe_provider_urls_are_rejected(base_url):
+    config = ModelConfig(provider='test', base_url=base_url, model_name='test-model', api_key='test-secret')
+    router = ModelRouter(config)
+    with pytest.raises(ModelProviderError):
+        router.generate('system', 'hello')
+
+
+@pytest.mark.parametrize('timeout', [0, -1, 121, float('inf'), float('nan')])
+def test_invalid_provider_timeouts_are_rejected(timeout):
+    config = ModelConfig(provider='test', base_url='https://model.example/v1', model_name='test-model', api_key='test-secret', timeout_seconds=timeout)
+    with pytest.raises(ModelProviderError, match='between 1 and 120'):
+        ModelRouter(config).generate('system', 'hello')
+
+
+def test_local_http_provider_is_allowed():
+    config = ModelConfig(provider='test', base_url='http://localhost:8080/v1', model_name='test-model', api_key='test-secret')
+    router = ModelRouter(config, transport=httpx.MockTransport(lambda request: httpx.Response(200, json={'choices': [{'message': {'content': 'Local ready'}}]})))
+    assert router.generate('system', 'hello') == 'Local ready'
+
+
+def test_provider_redirect_is_not_followed():
+    config = ModelConfig(provider='test', base_url='https://model.example/v1', model_name='test-model', api_key='test-secret')
+    router = ModelRouter(config, transport=httpx.MockTransport(lambda request: httpx.Response(302, headers={'Location': 'https://other.example/collect'})))
+    with pytest.raises(ModelProviderError):
+        router.generate('system', 'hello')
