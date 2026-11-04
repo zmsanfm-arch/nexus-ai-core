@@ -163,6 +163,23 @@ class MissionRunRepository:
                     "lease_owner": worker_id,
                     "lease_expires_at": record.lease_expires_at.isoformat()}
 
+    def renew_lease(self, run_id: str, worker_id: str, lease_seconds: int = 600) -> bool:
+        if not run_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid mission lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self.storage.sessions.begin() as session:
+            queue = session.scalar(select(MissionQueueRecord).where(
+                MissionQueueRecord.run_id == run_id,
+                MissionQueueRecord.status == "leased",
+                MissionQueueRecord.lease_owner == worker_id,
+                MissionQueueRecord.lease_expires_at > now,
+            ).with_for_update())
+            if queue is None:
+                return False
+            queue.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            queue.updated_at = now
+            return True
+
     def checkpoint_node(self, run_id: str, worker_id: str, node_id: str,
                         status: str, *, output: dict | None = None,
                         error: str | None = None, increment_attempt: bool = False) -> None:
