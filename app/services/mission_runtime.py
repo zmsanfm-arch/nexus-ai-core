@@ -84,7 +84,7 @@ class MissionRuntime:
             )
             succeeded = False
             last_error = "handler_failed"
-            for attempt in range(1, node.max_attempts + 1):
+            for attempt in range(1, mission_node.max_attempts + 1):
                 attempts_used += 1
                 self._audit(
                     "mission_node_started",
