@@ -82,7 +82,7 @@ def test_runtime_executes_nodes_sequentially_and_passes_dependency_outputs():
 def test_runtime_retries_only_within_node_attempt_budget():
     handler = Handler(fail_first=True)
     result = runtime(handler).execute(mission(), task_id="task-2")
-    assert result["status"] == "succeeded"
+    assert result["status"] == "nodes_succeeded"
     assert result["attempts_used"] == 3
     assert handler.calls == 3
 
