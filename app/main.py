@@ -4,6 +4,7 @@ import os
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
@@ -66,6 +67,19 @@ def health():
         "version": "0.2.0",
         "model_configured": model_router.select("health") is not None,
     }
+
+
+@app.get("/ready")
+def readiness():
+    """Report readiness only when the persistence layer answers a query."""
+    try:
+        store.check_database()
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "checks": {"database": "unavailable"}},
+        )
+    return {"status": "ready", "checks": {"database": "ok"}}
 
 
 @app.get("/agents")
