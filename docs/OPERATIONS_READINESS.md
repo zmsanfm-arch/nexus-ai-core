@@ -59,6 +59,53 @@ docker compose --env-file .env.production -f docker-compose.production.yml logs 
 
 Do not paste secrets into shell history, chat, GitHub issues, or logs. The sample file contains placeholders only.
 
+## Backup, restore, secrets, and alert operations
+
+### Encrypted PostgreSQL backup
+
+The repository provides `scripts/backup_postgres_encrypted.sh`. Install PostgreSQL client tools and age on the trusted host, provide `DATABASE_URL`, and set `AGE_RECIPIENT` to the public age recipient. The script writes a mode-0600 encrypted custom-format dump and SHA-256 sidecar into a mode-0700 directory. Store copies off-host in an access-controlled location with provider-side encryption and retention. Do not store the age identity/private key beside the backups.
+
+Example (run on the host; values are not to be pasted into chat or shell history):
+
+```bash
+export DATABASE_URL='postgresql://...'
+export AGE_RECIPIENT='age1...'
+BACKUP_DIR=/var/backups/nexus ./scripts/backup_postgres_encrypted.sh
+```
+
+### Isolated restore drill
+
+Create a disposable PostgreSQL database whose name starts with `nexus_restore_`, then run the restore script with its connection URL and the separately stored age identity file. The script checks the checksum when present and refuses database names without the isolated prefix. It uses `pg_restore --exit-on-error`; a successful exit is necessary but not sufficient—also verify Alembic head, row counts, key API reads, audit continuity, and queue state. Never point this script at production.
+
+```bash
+BACKUP_FILE=/var/backups/nexus/nexus-YYYYMMDDTHHMMSSZ.dump.age \
+AGE_IDENTITY_FILE=/secure/offline/backup-identity.txt \
+NEXUS_RESTORE_DATABASE_URL='postgresql://.../nexus_restore_drill' \
+NEXUS_RESTORE_CONFIRM=YES ./scripts/restore_postgres_drill.sh
+```
+
+Record backup timestamp, checksum, source revision, DB version, restore target, duration, and verification evidence. Set and measure RPO/RTO before accepting production.
+
+### API/admin secret rotation
+
+Run `python scripts/rotate_api_secrets.py --output /secure/path/nexus-secrets-next.env` on the host. It creates a new file exclusively with mode 0600 and never prints token values. Transfer the new values into the approved secret manager, update the deployment environment, restart API/worker, verify authenticated API and admin access, then revoke the old tokens. This is a controlled replacement procedure, not zero-downtime dual-token rotation; plan a brief maintenance window. Keep old credentials available only for the rollback window in the secret manager, then destroy them. Never commit generated env files.
+
+### Readiness and dead-letter alert delivery
+
+`scripts/monitor_nexus.py` is a one-shot external monitor. Configure `NEXUS_READY_URL` (the `/ready` URL), `NEXUS_QUEUE_URL` (the admin `/admin/queue` URL), `NEXUS_ADMIN_TOKEN`, and `NEXUS_ALERT_WEBHOOK` in the scheduler's secret store. Optional `NEXUS_DEAD_TASK_ALERT_THRESHOLD` defaults to 1. Run it every minute from a trusted scheduler (systemd timer, cron, or managed monitor), with a timeout and failure alert on the scheduler itself. It checks database readiness and dead-letter count, sends a Slack-compatible webhook message, and never prints credentials. Configure deduplication/cooldown in the receiving alert platform to prevent repeated notifications. The monitor is not active until deployed and its webhook delivery is tested.
+
+### PostgreSQL concurrency/load test
+
+CI includes a PostgreSQL-only concurrent claim test using the service database and eight workers against a 48-task batch. It asserts each queued task is claimed exactly once. This is a correctness regression test, not a production capacity benchmark. Before scaling out, run a controlled staging load test at measured target concurrency and record throughput, p50/p95/p99 latency, connection pool saturation, lock waits, CPU, memory, and error rate. Increase load gradually and define stop thresholds before execution.
+
+### Independent security review evidence
+
+A developer self-review is not an independent assessment. Require a reviewer who did not implement this code to sign off on: threat model and trust boundaries; authentication/authorization and IDOR; brute-force and distributed rate limits; SSRF/URL validation; secret storage/rotation/revocation; dependency and container vulnerabilities; logging/PII leakage; migration/rollback safety; backup encryption and restore; TLS configuration and external exposure. Attach dated findings, severity, remediation PRs, retest evidence, and explicit residual-risk acceptance. Do not mark this gate complete from CI alone.
+
+## Host, DNS, and TLS deployment gate
+
+No host, domain, DNS record, certificate, or firewall change is performed by this repository PR. Once an operator provisions an approved host and domain, keep application port 8000 bound to loopback and expose only 80/443 at the reverse proxy. Validate DNS A/AAAA records, certificate chain and hostname, TLS 1.2/1.3, HTTP-to-HTTPS redirect, HSTS after validation, strict Host allow-list, request-size limits, and that direct public access to port 8000 and PostgreSQL is blocked. Record certificate expiry monitoring and renewal testing. A green Docker smoke test does not establish any of these facts.
+
 ## Rollback and recovery
 
 - Keep the previous known-good image digest and application commit available.
