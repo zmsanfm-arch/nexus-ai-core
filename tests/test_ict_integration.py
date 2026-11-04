@@ -196,7 +196,7 @@ def test_indexed_knowledge_search_backfills_existing_chunks(tmp_path):
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
     storage = SQLAlchemyStore(database_url)
-    results = KnowledgeStoreAdapter(storage).search_knowledge("liquidity historical")
+    results = KnowledgeStoreAdapter(storage).search_knowledge("historical")
     assert len(results) == 1
     assert results[0]["source_id"] == "pre-index"
     storage.close()
