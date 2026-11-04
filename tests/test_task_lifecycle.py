@@ -101,10 +101,10 @@ def test_queue_summary_reports_all_lifecycle_states():
     store = InMemoryStore()
     queue = TaskQueueService(store)
     first = queue.enqueue("Queue the first task")
-    second = queue.enqueue("Queue the second task")
     lease = store.claim_next_task("worker-summary", lease_seconds=30)
     assert lease["task_id"] == first["id"]
     store.complete_queued_task(first["id"], "worker-summary")
+    queue.enqueue("Queue the second task")
     summary = store.queue_summary()
     assert summary == {"queued": 1, "leased": 0, "completed": 1, "dead": 0, "total": 2}
 
