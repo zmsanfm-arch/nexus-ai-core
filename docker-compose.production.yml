@@ -27,6 +27,7 @@ services:
       - .env.production
     environment:
       APP_ENV: production
+      NEXUS_MIGRATION_COMMAND: "true"
     depends_on:
       postgres:
         condition: service_healthy
