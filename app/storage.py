@@ -181,7 +181,9 @@ class SQLAlchemyStore:
         if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
             raise ValueError("Invalid worker identity or lease duration.")
         now = datetime.now(timezone.utc)
-        with self._lock, self.sessions.begin() as session:
+        # PostgreSQL row-level SKIP LOCKED is the concurrency primitive here.
+        # Do not serialize independent worker claims behind a process-local mutex.
+        with self.sessions.begin() as session:
             query = (
                 select(TaskQueueRecord)
                 .where(
