@@ -1,3 +1,5 @@
+import pytest
+
 from app.production_config import validate_production_environment
 
 
@@ -69,3 +71,14 @@ def test_production_rate_limits_accept_configured_positive_values():
     env["NEXUS_API_RATE_LIMIT_PER_MINUTE"] = "1200"
     env["NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE"] = "600"
     assert validate_production_environment(env) == []
+
+
+def test_application_lifespan_rejects_invalid_production_configuration(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NEXUS_API_TOKEN", "short")
+    with pytest.raises(RuntimeError, match="Production configuration rejected"):
+        with TestClient(app):
+            pass
