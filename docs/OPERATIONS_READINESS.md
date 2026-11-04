@@ -10,7 +10,7 @@
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
 - Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
 - `/health` is process liveness only. `/ready` executes `SELECT 1` against the configured database and returns HTTP 503 when persistence is unavailable. Neither endpoint proves provider reachability or worker health. Admin-only `GET /admin/queue` reports aggregate queued/leased/completed/dead counts without exposing task payloads or failure details.
-- Alembic migrations currently run during store initialization. Run exactly one API instance. Do not scale horizontally until migrations move to a dedicated release step with startup coordination.
+- Production Compose now runs Alembic as a one-shot `migrate` service before API startup. PostgreSQL migrations acquire a transaction-scoped advisory lock; API and worker startup use `NEXUS_SKIP_MIGRATIONS=true` and fail closed unless the database is already at the exact application migration head. Keep this release-job ordering in place for every deployment.
 - Research backtests are not broker-grade and do not authorize trading.
 
 ## Deployment package
@@ -33,7 +33,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 5. Generate independent high-entropy API/admin secrets. Store them outside Git; establish rotation and emergency revocation. Do not reuse passwords.
 6. Provision PostgreSQL with least-privilege credentials, encrypted storage, restricted network access, automated backups, retention, and a tested restore procedure.
 7. Validate `.env.production` and run Compose config validation without printing secrets into logs or tickets.
-8. Apply migrations once, verify Alembic revision, then start one API instance. Check liveness, authenticated API access, admin route isolation, and database persistence.
+8. Run the one-shot migration release job and verify its successful exit and Alembic head before starting the API. Compose enforces this dependency (`service_completed_successfully`); the API refuses to start against a missing or stale schema. Check liveness, database readiness, authenticated API access, admin route isolation, and persistence.
 9. Establish uptime/error/latency monitoring, disk/database capacity alerts, log retention/redaction, incident ownership, and an on-call response path.
 10. Complete independent security review, including brute-force controls, rate limiting, authorization boundaries, dependency/container scanning, secret leakage, and backup restoration.
 11. Confirm privacy, legal, and provider terms before importing external knowledge or sending user data to a model provider.
@@ -72,7 +72,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 **Queued-task conditional GO:** the repository now includes a standalone generic advisory worker and a supervised Compose service behind the explicit `worker` profile. It remains opt-in because it sends task content to the configured model provider. Before enabling it, approve the provider/privacy terms, configure credentials, validate the exact-SHA CI and container image, and establish queue/dead-letter alerts. Administrators can inspect aggregate counts through `GET /admin/queue`; this endpoint is not a substitute for alert delivery. Only `general` tasks are supported; ICT specialist and all execution task types fail closed. Worker lease is 600 seconds by default; three sequential model calls have a maximum configured timeout budget of 360 seconds. Long-running or multi-instance worker scaling still requires lease renewal/heartbeat and PostgreSQL concurrency/load testing.
 
-**Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, worker lease heartbeat/renewal, idempotency guarantees, dead-letter alerting/operations, and load/concurrency testing.
+**Additional NO-GO for scale-out:** OIDC or equivalent multi-user identity, distributed rate limiting, worker lease heartbeat/renewal, idempotency guarantees, dead-letter alerting/operations, and load/concurrency testing. The dedicated migration job and PostgreSQL advisory lock are implemented in the production Compose path, but still require deployment-level verification.
 
 **Trading remains disabled.** This runbook does not enable live trading or broker connectivity.
 
@@ -86,7 +86,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
 | Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; lease renewal before workloads can exceed the configured lease |
-| Migrations | Alembic at startup | Dedicated migration job/lock before multi-instance use |
+| Migrations | Dedicated one-shot Compose release job; PostgreSQL transaction advisory lock; API/worker verify exact schema head and skip implicit migration | Deployment-level migration/rollback drill and verification on the target host |
 | Backups | Not provisioned | Automated encrypted backups and restore drills |
 | Observability | Process liveness, database readiness (`/ready`), and admin-only aggregate queue counts | Metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
