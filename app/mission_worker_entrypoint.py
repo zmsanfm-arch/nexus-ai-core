@@ -6,6 +6,7 @@ import os
 import signal
 import socket
 import time
+from uuid import uuid4
 
 from app.agents.ict_mentor import ICTMentorHandler
 from app.services.knowledge_store import KnowledgeStoreAdapter
@@ -44,7 +45,7 @@ def run() -> None:
         registry=registry,
         handlers=handlers,
         storage=store,
-        worker_id=os.getenv("NEXUS_MISSION_WORKER_ID", socket.gethostname())[:128],
+        worker_id=f"{os.getenv('NEXUS_MISSION_WORKER_ID', socket.gethostname())[:100]}-{uuid4().hex[:16]}",
         lease_seconds=lease_seconds,
     )
 
