@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="NEXUS_TEST_POSTGRES_UR
 
 def test_concurrent_postgres_workers_claim_each_task_at_most_once():
     store = SQLAlchemyStore(DATABASE_URL)
-    task_ids = [str(uuid4()) for _ in range(48)]
+    task_ids = [str(uuid4()) for _ in range(256)]
     worker_prefix = f"concurrency-{uuid4()}"
     try:
         for task_id in task_ids:
