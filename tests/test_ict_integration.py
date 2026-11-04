@@ -35,11 +35,8 @@ def test_knowledge_adapter_preserves_provenance_and_retrieves(tmp_path):
 def test_knowledge_adapter_rejects_non_https_and_duplicate_source():
     knowledge = KnowledgeStoreAdapter(InMemoryStore())
     source = {
-        "id": "source-1",
-        "title": "User note",
-        "url": "http://invalid.example",
-        "source_type": "user_note",
-        "usage_basis": "user_provided",
+        "id": "source-1", "title": "User note", "url": "http://invalid.example",
+        "source_type": "user_note", "usage_basis": "user_provided",
         "retrieved_at": "2026-11-04T10:00:00+00:00",
     }
     try:
@@ -56,6 +53,21 @@ def test_knowledge_adapter_rejects_non_https_and_duplicate_source():
         assert "immutable" in str(exc)
 
 
+def test_knowledge_search_supports_persian_text():
+    knowledge = KnowledgeStoreAdapter(InMemoryStore())
+    knowledge.save_knowledge_source(
+        {
+            "id": "persian-ict-1", "title": "یادداشت نقدینگی",
+            "url": "https://example.org/persian", "source_type": "user_note",
+            "usage_basis": "user_provided", "retrieved_at": "2026-11-04T10:00:00+00:00",
+        },
+        [{"ordinal": 0, "text": "جمع‌آوری نقدینگی در سقف سشن معاملاتی"}],
+    )
+    results = knowledge.search_knowledge("نقدینگی سقف سشن")
+    assert len(results) == 1
+    assert results[0]["source_id"] == "persian-ict-1"
+
+
 def test_ict_specialist_is_routed_through_core_orchestrator():
     from app.services.orchestrator import Orchestrator
     from app.services.registry import AgentRegistry
@@ -63,25 +75,18 @@ def test_ict_specialist_is_routed_through_core_orchestrator():
     class Router:
         def generate(self, system_prompt, user_prompt):
             return json.dumps({
-                "agent_id": "ict_mentor",
-                "mode": "advisory",
-                "answer": "This is an advisory explanation.",
-                "source_claims": [],
-                "user_rules_used": [],
-                "agent_inferences": [],
-                "proposed_actions": [],
-                "risk_decision": "not_assessed_by_specialist",
-                "execution_result": None,
+                "agent_id": "ict_mentor", "mode": "advisory",
+                "answer": "This is an advisory explanation.", "source_claims": [],
+                "user_rules_used": [], "agent_inferences": [], "proposed_actions": [],
+                "risk_decision": "not_assessed_by_specialist", "execution_result": None,
                 "uncertainties": ["No source segment was retrieved for this request."],
             })
 
     storage = InMemoryStore()
     orchestrator = Orchestrator(AgentRegistry(), object(), storage, Router())
     task = orchestrator.submit(
-        "Explain liquidity sweeps in ICT terms",
-        task_type="ict.education",
-        context={"instrument": "XAUUSD"},
-        principal_id="test-user",
+        "Explain liquidity sweeps in ICT terms", task_type="ict.education",
+        context={"instrument": "XAUUSD"}, principal_id="test-user",
     )
     assert task["status"] == "completed"
     assert task["assigned_agent"] == "ict_mentor"
