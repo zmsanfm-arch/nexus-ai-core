@@ -1,0 +1,17 @@
+{
+	admin off
+}
+
+{$NEXUS_DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 10MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-X-Powered-By
+	}
+	reverse_proxy api:8000
+}

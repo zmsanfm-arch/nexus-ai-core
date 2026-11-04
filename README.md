@@ -8,14 +8,14 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 - Strict Pydantic contracts, bounded JSON inputs, and server-side model configuration.
 - SQLAlchemy persistence for tasks, approvals, audit events, and durable task queue leases.
 - Authenticated task submission and principal-scoped task reads.
-- Admin-only approvals, audit access, and knowledge-source ingestion.
+- Admin-only approvals, audit access, knowledge-source ingestion, and aggregate queue observability.
 - Specialist dispatch requires both a central permission policy and an explicit manifest grant.
 
 ## ICT Mentor integration
 
 The integration branch registers ICT Mentor through the central Orchestrator and SpecialistRuntime for five advisory capabilities: education, source lookup, chart analysis, strategy formalization, and trade review. Each dispatch requires both the central PermissionService and the manifest grant.
 
-The handler retrieves source segments from the NEXUS-owned knowledge store, validates provenance, accepts only explicitly user-confirmed rules, and structurally forbids execution results. Knowledge search is a lexical baseline, not semantic retrieval.
+The handler retrieves source segments from the NEXUS-owned knowledge store, validates provenance, accepts only explicitly user-confirmed rules, and structurally forbids execution results. Knowledge search uses an indexed lexical baseline with Persian/Arabic Unicode normalization; it is not semantic/vector retrieval.
 
 **Trading boundary:** ICT Mentor is advisory-only. Position monitoring, position management, autonomous execution, MT5/broker connectivity, account/position access, order placement/cancellation, and live trading remain disabled. Backtesting is deterministic research-only midpoint OHLC simulation, not broker-grade execution simulation and never authorizes a trade.
 
@@ -38,9 +38,9 @@ Without the required model settings, model-dependent tasks return blocked; they 
 - `POST /tasks` executes through the synchronous orchestration path.
 - `POST /tasks/queued` durably enqueues a task.
 - `GET /tasks/{task_id}` returns a task only to its owning API principal.
-- Worker primitives implement leases, retries, ownership checks, and dead-letter state.
-
-The repository contains queue and worker lifecycle primitives, but no continuously supervised worker deployment. A production deployment must run a separately supervised worker with an approved task handler. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
+- Worker lifecycle includes a standalone `python -m app.worker_entrypoint` process and an opt-in supervised Compose service (`--profile worker`). The generic worker only accepts `general` tasks; unregistered specialist and execution task types fail closed. The service requires an explicitly approved and configured model provider.
+- Non-pass or missing auditor verdicts leave the business task blocked even when queue processing completes. Queue state is visible through admin-only `GET /admin/queue`, which returns aggregate counts only.
+- Queue processing has bounded retries and dead-letter state. Active workers renew owner-checked leases while handlers run; a lost lease is audited and stale results are not committed. External dead-letter alert delivery, idempotency validation, and PostgreSQL multi-worker load/concurrency testing remain outstanding. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
 
 ## Authentication and administration
 
@@ -62,13 +62,14 @@ The current token model supports one configured API principal, not multi-user id
 - `GET /tasks/{task_id}`
 - `POST /approvals/{approval_id}/decision` (administrator only)
 - `GET /audit?limit=100` (administrator only)
+- `GET /admin/queue` (administrator only; aggregate counts only)
 - `POST /knowledge/sources` (administrator only)
 - `GET /knowledge/search` (authenticated)
 - `POST /research/backtests/run` (authenticated; research-only)
 
 ## Deployment status and remaining gates
 
-This repository is not yet a production deployment. No cloud host, production identity provider, secret manager, distributed rate limiter, supervised worker service, or operational monitoring has been provisioned. Do not expose it publicly before deployment hardening and independent security review.
+This repository is not yet a production deployment. No cloud host, production identity provider, managed secret rotation, distributed rate limiter, queue alert delivery, backup/restore drill, or independent security review has been completed. The worker is opt-in and not activated by the default Compose profile. Do not expose it publicly before deployment hardening and independent security review.
 
 ## Local development
 
@@ -78,3 +79,20 @@ pip install pytest
 uvicorn app.main:app --reload
 pytest -q
 ```
+
+## Strategy research and historical market data
+
+- Strategy specifications are schema-validated and immutable; lifecycle transitions require deterministic evidence gates and are centrally audited.
+- Research experiment plans are immutable and schema-validated.
+- Historical OHLC CSV datasets are imported with strict bounds, timestamp/price validation, quality reporting, SHA-256 identity, and immutable storage. Dataset reads are paginated.
+- Research and market-data APIs are authenticated; writes require the administrator role. Demo promotion remains disabled and no broker/live execution capability is introduced.
+
+### APIs
+
+- `POST /strategies/{strategy_id}/versions` and `GET /strategies/{strategy_id}/versions/{version}`
+- `POST /strategies/{strategy_id}/versions/{version}/transitions` and `GET /strategies/{strategy_id}/versions/{version}/transitions`
+- `POST /research/experiments` and `GET /research/experiments/{experiment_id}`
+- `POST /market-data/datasets` (multipart CSV; maximum 5 MiB and 10,000 rows)
+- `GET /market-data/datasets/{dataset_id}` and `GET /market-data/datasets/{dataset_id}/candles`
+
+Market datasets are research inputs only. Backtest or lifecycle evidence cannot authorize demo or live trading.

@@ -19,7 +19,7 @@ def test_sqlite_schema_is_created_by_versioned_migration_and_is_idempotent(tmp_p
     inspector = inspect(first.engine)
     assert EXPECTED_TABLES.issubset(set(inspector.get_table_names()))
     with first.engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0001_initial"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
     first.save_task({"id": "persisted-task", "status": "queued"})
     first.close()
 
@@ -54,7 +54,7 @@ def test_postgres_migrations_and_concurrent_queue_claims():
     store = SQLAlchemyStore(os.environ["NEXUS_TEST_POSTGRES_URL"])
     try:
         with store.engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0001_initial"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
 
         for task_id in ("pg-queue-1", "pg-queue-2"):
             store.enqueue_task({"id": task_id, "objective": "database concurrency test"})
@@ -65,3 +65,21 @@ def test_postgres_migrations_and_concurrent_queue_claims():
         assert len(set(claimed_ids)) == 2
     finally:
         store.close()
+
+
+
+def test_skip_migrations_requires_database_at_exact_head(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'verified.db'}"
+    migrated = SQLAlchemyStore(url)
+    migrated.close()
+
+    monkeypatch.setenv("NEXUS_SKIP_MIGRATIONS", "true")
+    verified = SQLAlchemyStore(url)
+    verified.close()
+
+
+def test_skip_migrations_fails_closed_for_unmigrated_database(tmp_path, monkeypatch):
+    url = f"sqlite:///{tmp_path / 'unmigrated.db'}"
+    monkeypatch.setenv("NEXUS_SKIP_MIGRATIONS", "true")
+    with pytest.raises(RuntimeError, match="migration verification failed|not at the application migration head"):
+        SQLAlchemyStore(url)

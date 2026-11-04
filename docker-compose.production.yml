@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+    # No host port: PostgreSQL is private to the Compose network.
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      NEXUS_MIGRATION_COMMAND: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    # One-shot release job. PostgreSQL advisory lock serializes concurrent runs.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      NEXUS_SKIP_MIGRATIONS: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+
+  worker:
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.worker_entrypoint"]
+    restart: unless-stopped
+    stop_grace_period: 7m
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      NEXUS_SKIP_MIGRATIONS: "true"
+      NEXUS_WORKER_POLL_SECONDS: ${NEXUS_WORKER_POLL_SECONDS:-2}
+      NEXUS_WORKER_LEASE_SECONDS: ${NEXUS_WORKER_LEASE_SECONDS:-600}
+      NEXUS_WORKER_MAX_ATTEMPTS: ${NEXUS_WORKER_MAX_ATTEMPTS:-3}
+      NEXUS_WORKER_RETRY_DELAY_SECONDS: ${NEXUS_WORKER_RETRY_DELAY_SECONDS:-30}
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    # Worker has no published ports. Only general advisory tasks are enabled.
+
+
+  proxy:
+    image: caddy:2
+    profiles: ["public"]
+    restart: unless-stopped
+    environment:
+      NEXUS_DOMAIN: ${NEXUS_DOMAIN:?Set NEXUS_DOMAIN after DNS is configured}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+    networks: [backend]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  backend:
+    driver: bridge

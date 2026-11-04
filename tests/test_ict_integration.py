@@ -136,3 +136,67 @@ def test_ict_rejects_fabricated_source_claim_even_with_valid_source_metadata():
     handler = ICTMentorHandler(Router(), Knowledge(), system_prompt="Advisory only")
     with pytest.raises(ValueError, match="exact excerpt"):
         handler.run(request)
+
+
+def test_indexed_knowledge_search_normalizes_persian_and_arabic_variants(tmp_path):
+    storage = SQLAlchemyStore(f"sqlite:///{tmp_path / 'indexed-persian.db'}")
+    knowledge = KnowledgeStoreAdapter(storage)
+    knowledge.save_knowledge_source(
+        {
+            "id": "persian-index-1", "title": "Persian normalization",
+            "url": "https://example.org/persian-index", "source_type": "user_note",
+            "usage_basis": "user_provided", "retrieved_at": "2026-11-04T10:00:00+00:00",
+        },
+        [{"ordinal": 0, "text": "جمع‌آوری نقدینگی در سقف سشن كليدی"}],
+    )
+    # Query uses Arabic Yeh/Kaf, diacritics and no ZWNJ; stored text uses Persian forms.
+    results = knowledge.search_knowledge("نقدينگي سقف سشن کلیدی")
+    assert len(results) == 1
+    assert results[0]["source_id"] == "persian-index-1"
+    storage.close()
+
+
+def test_indexed_knowledge_search_backfills_existing_chunks(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'knowledge-backfill.db'}"
+    storage = SQLAlchemyStore(database_url)
+    knowledge = KnowledgeStoreAdapter(storage)
+    knowledge.save_knowledge_source(
+        {
+            "id": "legacy-source", "title": "Legacy",
+            "url": "https://example.org/legacy", "source_type": "document",
+            "usage_basis": "user_provided", "retrieved_at": "2026-11-04T10:00:00+00:00",
+        },
+        [{"ordinal": 0, "text": "Legacy liquidity sweep evidence"}],
+    )
+    storage.close()
+
+    # Rebuild a fresh database at migration 0001, insert legacy rows, then upgrade.
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, text
+    from pathlib import Path
+    import datetime
+
+    engine = create_engine(database_url)
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.downgrade(config, "0001_initial")
+        connection.execute(text(
+            "INSERT INTO knowledge_sources "
+            "(id, title, url, source_type, usage_basis, retrieved_at) "
+            "VALUES ('pre-index', 'Pre-index', 'https://example.org/pre', "
+            "'document', 'user_provided', :retrieved)"
+        ), {"retrieved": datetime.datetime(2026, 11, 4, 10, 0, tzinfo=datetime.timezone.utc)})
+        connection.execute(text(
+            "INSERT INTO knowledge_chunks (id, source_id, ordinal, text) "
+            "VALUES ('pre-index:0', 'pre-index', 0, 'Historical liquidity sweep')"
+        ))
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+    storage = SQLAlchemyStore(database_url)
+    results = KnowledgeStoreAdapter(storage).search_knowledge("historical")
+    assert len(results) == 1
+    assert results[0]["source_id"] == "pre-index"
+    storage.close()
