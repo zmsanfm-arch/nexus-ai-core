@@ -9,7 +9,7 @@
 - Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, and uses bounded retries/dead-letter handling. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
 - Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
-- `/health` is process liveness only. It does not prove database readiness, provider reachability, or worker health.
+- `/health` is process liveness only. It does not prove database readiness, provider reachability, or worker health. Admin-only `GET /admin/queue` reports aggregate queued/leased/completed/dead counts without exposing task payloads or failure details.
 - Alembic migrations currently run during store initialization. Run exactly one API instance. Do not scale horizontally until migrations move to a dedicated release step with startup coordination.
 - Research backtests are not broker-grade and do not authorize trading.
 
@@ -70,7 +70,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 **NO-GO until all are true:** reviewed/merged PR chain; exact-SHA CI green; independent security review complete; TLS/firewall verified; secrets stored and rotation tested; PostgreSQL backups/restores tested; migration procedure controlled; monitoring/alerts active; auth/rate limits validated; incident and rollback drills completed.
 
-**Queued-task conditional GO:** the repository now includes a standalone generic advisory worker and a supervised Compose service behind the explicit `worker` profile. It remains opt-in because it sends task content to the configured model provider. Before enabling it, approve the provider/privacy terms, configure credentials, validate the exact-SHA CI and container image, and establish queue/dead-letter alerts. Only `general` tasks are supported; ICT specialist and all execution task types fail closed. Worker lease is 600 seconds by default; three sequential model calls have a maximum configured timeout budget of 360 seconds. Long-running or multi-instance worker scaling still requires lease renewal/heartbeat and PostgreSQL concurrency/load testing.
+**Queued-task conditional GO:** the repository now includes a standalone generic advisory worker and a supervised Compose service behind the explicit `worker` profile. It remains opt-in because it sends task content to the configured model provider. Before enabling it, approve the provider/privacy terms, configure credentials, validate the exact-SHA CI and container image, and establish queue/dead-letter alerts. Administrators can inspect aggregate counts through `GET /admin/queue`; this endpoint is not a substitute for alert delivery. Only `general` tasks are supported; ICT specialist and all execution task types fail closed. Worker lease is 600 seconds by default; three sequential model calls have a maximum configured timeout budget of 360 seconds. Long-running or multi-instance worker scaling still requires lease renewal/heartbeat and PostgreSQL concurrency/load testing.
 
 **Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, worker lease heartbeat/renewal, idempotency guarantees, dead-letter alerting/operations, and load/concurrency testing.
 
@@ -88,7 +88,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; lease renewal before workloads can exceed the configured lease |
 | Migrations | Alembic at startup | Dedicated migration job/lock before multi-instance use |
 | Backups | Not provisioned | Automated encrypted backups and restore drills |
-| Observability | Basic health endpoint | DB readiness, metrics, traces, alerts, redacted logs |
+| Observability | Process liveness plus admin-only aggregate queue counts | DB readiness, metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
 | Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
 | Security assurance | CI only | Independent review, threat model, dependency/container scans |
