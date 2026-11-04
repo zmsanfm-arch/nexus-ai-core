@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from dataclasses import replace
 
 import pytest
 
@@ -72,8 +73,6 @@ def test_acceptance_fails_if_any_declared_threshold_is_missed():
 
 
 def test_evaluator_computes_expectancy_r_from_trade_ledger():
-    from dataclasses import replace
-
     first = replace(trade("r1", 10, 1), initial_risk=5, r_multiple=2.0)
     second = replace(trade("r2", -5, 2), initial_risk=5, r_multiple=-1.0)
     result = evaluate_trades([first, second], 100)
@@ -91,3 +90,29 @@ def test_evaluator_computes_expectancy_r_from_trade_ledger():
         },
     )
     assert decision.status == "pass"
+
+
+@pytest.mark.parametrize("equity", [float("nan"), float("inf"), float("-inf"), 0, -1, True])
+def test_evaluator_rejects_invalid_initial_equity(equity):
+    with pytest.raises(ValueError, match="finite and positive"):
+        evaluate_trades([], equity)
+
+
+@pytest.mark.parametrize("pnl", [float("nan"), float("inf"), float("-inf")])
+def test_evaluator_rejects_non_finite_trade_pnl(pnl):
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_trades([trade("bad", pnl, 1)], 100)
+
+
+def test_acceptance_rejects_malformed_thresholds():
+    evaluation = evaluate_trades([trade("a", 10, 1)], 100)
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_acceptance(evaluation, {"minimum_profit_factor": float("nan")})
+    with pytest.raises(ValueError, match="boolean"):
+        evaluate_acceptance(evaluation, {"robustness_required": "yes"})
+
+
+def test_acceptance_validates_threshold_even_when_metric_is_unevaluable():
+    evaluation = evaluate_trades([trade("winner", 10, 1)], 100)
+    with pytest.raises(ValueError, match="finite"):
+        evaluate_acceptance(evaluation, {"minimum_profit_factor": float("nan")})

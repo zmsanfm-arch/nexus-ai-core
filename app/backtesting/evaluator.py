@@ -1,5 +1,6 @@
 """Transparent metrics for deterministic backtest trade ledgers."""
 from dataclasses import dataclass
+from math import isfinite
 from typing import Sequence
 
 from app.backtesting.engine import TradeResult
@@ -24,22 +25,34 @@ class Evaluation:
 
 
 def evaluate_trades(trades: Sequence[TradeResult], initial_equity: float) -> Evaluation:
-    if initial_equity <= 0:
-        raise ValueError("Initial equity must be positive")
+    if isinstance(initial_equity, bool) or not isinstance(initial_equity, (int, float)) or not isfinite(initial_equity) or initial_equity <= 0:
+        raise ValueError("Initial equity must be finite and positive")
     ordered = sorted(trades, key=lambda trade: (trade.exit_time, trade.trade_id))
-    pnls = [float(trade.net_pnl) for trade in ordered]
+    pnls = []
+    r_values = []
+    for trade in ordered:
+        pnl = trade.net_pnl
+        if isinstance(pnl, bool) or not isinstance(pnl, (int, float)) or not isfinite(pnl):
+            raise ValueError("Trade net PnL values must be finite numbers")
+        pnls.append(float(pnl))
+        if trade.r_multiple is not None:
+            value = trade.r_multiple
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+                raise ValueError("Trade R-multiples must be finite numbers")
+            r_values.append(float(value))
     wins = sum(pnl > 0 for pnl in pnls)
     losses = sum(pnl < 0 for pnl in pnls)
     breakeven = len(pnls) - wins - losses
     gross_profit = sum(pnl for pnl in pnls if pnl > 0)
     gross_loss = abs(sum(pnl for pnl in pnls if pnl < 0))
-    r_values = [trade.r_multiple for trade in ordered if trade.r_multiple is not None]
-    equity = initial_equity
-    peak = initial_equity
+    equity = float(initial_equity)
+    peak = equity
     max_drawdown = 0.0
     curve = [equity]
     for pnl in pnls:
         equity += pnl
+        if not isfinite(equity):
+            raise ValueError("Equity curve overflowed the finite numeric range")
         peak = max(peak, equity)
         if peak > 0:
             max_drawdown = max(max_drawdown, (peak - equity) / peak)
@@ -73,38 +86,61 @@ def evaluate_acceptance(
     expectancy_r: float | None = None,
     robustness_passed: bool | None = None,
 ) -> AcceptanceDecision:
-    """Evaluate predeclared gates; missing evidence blocks rather than passes."""
+    """Evaluate predeclared gates; malformed or missing evidence never passes."""
+    if not isinstance(criteria, dict):
+        raise ValueError("Acceptance criteria must be an object")
     owner = criteria.get("criteria_owner", "research_default")
     if owner not in {"user", "central_policy", "research_default"}:
         raise ValueError("Unknown acceptance criteria owner")
-    passed, failed, unevaluable = [], [], []
 
+    def finite_number(name, value, *, integer=False):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+            raise ValueError(f"{name} must be a finite number")
+        if integer and (not isinstance(value, int) or value < 0):
+            raise ValueError(f"{name} must be a non-negative integer")
+        return value
+
+    passed, failed, unevaluable = [], [], []
     checks = [
-        ("minimum_trades", evaluation.trade_count, lambda actual, limit: actual >= limit),
-        ("minimum_profit_factor", evaluation.profit_factor, lambda actual, limit: actual is not None and actual >= limit),
-        ("maximum_drawdown", evaluation.max_drawdown, lambda actual, limit: actual <= limit),
+        ("minimum_trades", evaluation.trade_count, lambda actual, limit: actual >= limit, True),
+        ("minimum_profit_factor", evaluation.profit_factor, lambda actual, limit: actual is not None and actual >= limit, False),
+        ("maximum_drawdown", evaluation.max_drawdown, lambda actual, limit: actual <= limit, False),
     ]
-    for name, actual, predicate in checks:
+    for name, actual, predicate, integer in checks:
         limit = criteria.get(name)
-        if limit is None or actual is None:
+        if limit is None:
             unevaluable.append(name)
-        elif predicate(actual, limit):
-            passed.append(name)
+            continue
+        limit = finite_number(name, limit, integer=integer)
+        if name == "minimum_profit_factor" and limit < 0:
+            raise ValueError("minimum_profit_factor cannot be negative")
+        if name == "maximum_drawdown" and not 0 <= limit <= 1:
+            raise ValueError("maximum_drawdown must be between 0 and 1")
+        if actual is None:
+            unevaluable.append(name)
         else:
-            failed.append(name)
+            (passed if predicate(actual, limit) else failed).append(name)
 
     min_expectancy = criteria.get("minimum_expectancy_r")
     expectancy_r = evaluation.expectancy_r if expectancy_r is None else expectancy_r
-    if min_expectancy is None or expectancy_r is None:
+    if min_expectancy is None:
         unevaluable.append("minimum_expectancy_r")
-    elif expectancy_r >= min_expectancy:
-        passed.append("minimum_expectancy_r")
     else:
-        failed.append("minimum_expectancy_r")
+        min_expectancy = finite_number("minimum_expectancy_r", min_expectancy)
+        if expectancy_r is None:
+            unevaluable.append("minimum_expectancy_r")
+        else:
+            expectancy_r = finite_number("expectancy_r", expectancy_r)
+            (passed if expectancy_r >= min_expectancy else failed).append("minimum_expectancy_r")
 
-    if criteria.get("robustness_required", False):
+    robustness_required = criteria.get("robustness_required", False)
+    if not isinstance(robustness_required, bool):
+        raise ValueError("robustness_required must be boolean")
+    if robustness_required:
         if robustness_passed is None:
             unevaluable.append("robustness_required")
+        elif not isinstance(robustness_passed, bool):
+            raise ValueError("robustness_passed must be boolean")
         elif robustness_passed:
             passed.append("robustness_required")
         else:

@@ -5,8 +5,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, create_engine, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, Integer, String, create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
 
@@ -51,7 +50,7 @@ class TaskQueueRecord(Base):
 
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
-    def __init__(self, database_url: str | None = None):
+    def __init__(self, database_url: str | None = None, run_migrations: bool = True):
         url = database_url or os.getenv("DATABASE_URL", "sqlite:///./data/nexus.db")
         if url.startswith("sqlite:///"):
             db_path = url.removeprefix("sqlite:///")
@@ -63,7 +62,36 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        Base.metadata.create_all(self.engine)
+        if run_migrations:
+            self._run_migrations()
+
+    def _run_migrations(self):
+        from alembic import command
+        from alembic.config import Config
+        from alembic.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False).replace("%", "%%"))
+        if os.getenv("NEXUS_SKIP_MIGRATIONS", "").strip().lower() in {"1", "true", "yes"}:
+            try:
+                with self.engine.connect() as connection:
+                    current = MigrationContext.configure(connection).get_current_revision()
+                expected = ScriptDirectory.from_config(config).get_current_head()
+            except Exception as exc:
+                raise RuntimeError("Database migration verification failed; run the dedicated migration release job.") from exc
+            if not expected or current != expected:
+                raise RuntimeError("Database schema is not at the application migration head; run the dedicated migration release job.")
+            return
+        with self.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+
+    def check_database(self):
+        """Execute a minimal round-trip query against the configured database."""
+        with self.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
 
     def save_task(self, task: dict):
         with self._lock, self.sessions.begin() as session:
@@ -91,6 +119,30 @@ class SQLAlchemyStore:
         with self.sessions() as session:
             record = session.get(ApprovalRecord, approval_id)
             return dict(record.data) if record else None
+
+    def create_approval_with_audit(self, approval: dict, event: dict):
+        with self._lock, self.sessions.begin() as session:
+            session.add(ApprovalRecord(id=approval["id"], data=dict(approval)))
+            session.add(AuditRecord(data=dict(event), recorded_at=datetime.now(timezone.utc)))
+
+    def decide_approval_with_audit(self, approval_id: str, approved: bool, reviewer: str):
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(ApprovalRecord).where(ApprovalRecord.id == approval_id).with_for_update()
+            )
+            if record is None:
+                raise KeyError(approval_id)
+            item = dict(record.data)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            record.data = item
+            session.add(AuditRecord(data={
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+            }, recorded_at=datetime.now(timezone.utc)))
+            return item
 
     def append_audit(self, event: dict):
         with self._lock, self.sessions.begin() as session:
@@ -129,7 +181,9 @@ class SQLAlchemyStore:
         if not worker_id or len(worker_id) > 128 or lease_seconds < 1:
             raise ValueError("Invalid worker identity or lease duration.")
         now = datetime.now(timezone.utc)
-        with self._lock, self.sessions.begin() as session:
+        # PostgreSQL row-level SKIP LOCKED is the concurrency primitive here.
+        # Do not serialize independent worker claims behind a process-local mutex.
+        with self.sessions.begin() as session:
             query = (
                 select(TaskQueueRecord)
                 .where(
@@ -152,6 +206,39 @@ class SQLAlchemyStore:
             record.updated_at = now
             return {"task_id": record.task_id, "attempts": record.attempts,
                     "lease_owner": worker_id, "lease_expires_at": record.lease_expires_at.isoformat()}
+
+    def renew_queued_task_lease(self, task_id: str, worker_id: str, lease_seconds: int) -> bool:
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(TaskQueueRecord)
+                .where(
+                    TaskQueueRecord.task_id == task_id,
+                    TaskQueueRecord.status == "leased",
+                    TaskQueueRecord.lease_owner == worker_id,
+                    TaskQueueRecord.lease_expires_at > now,
+                )
+                .with_for_update()
+            )
+            if record is None:
+                return False
+            record.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            record.updated_at = now
+            return True
+
+    def queue_summary(self):
+        with self.sessions() as session:
+            rows = session.execute(
+                select(TaskQueueRecord.status, func.count())
+                .group_by(TaskQueueRecord.status)
+            ).all()
+        summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+        for status, count in rows:
+            summary[status] = int(count)
+        summary["total"] = sum(summary.values())
+        return summary
 
     def complete_queued_task(self, task_id: str, worker_id: str):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
@@ -200,6 +287,10 @@ class InMemoryStore:
         self.queue = {}
         self._lock = RLock()
 
+    def check_database(self):
+        """The in-memory test store is always available while instantiated."""
+        return True
+
     def save_task(self, task):
         with self._lock:
             self.tasks[task["id"]] = dict(task)
@@ -217,6 +308,31 @@ class InMemoryStore:
         with self._lock:
             item = self.approvals.get(approval_id)
             return dict(item) if item else None
+
+    def create_approval_with_audit(self, approval, event):
+        with self._lock:
+            if approval["id"] in self.approvals:
+                raise ValueError("Approval already exists")
+            self.approvals[approval["id"]] = dict(approval)
+            self.audit.append({**event, "recorded_at": datetime.now(timezone.utc).isoformat()})
+
+    def decide_approval_with_audit(self, approval_id, approved, reviewer):
+        with self._lock:
+            item = self.approvals.get(approval_id)
+            if item is None:
+                raise KeyError(approval_id)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item = dict(item)
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            self.approvals[approval_id] = item
+            self.audit.append({
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return item
 
 
     def enqueue_task(self, task):
@@ -253,6 +369,30 @@ class InMemoryStore:
             item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
             item["updated_at"] = now
             return {**item, "lease_expires_at": item["lease_expires_at"].isoformat()}
+
+    def renew_queued_task_lease(self, task_id, worker_id, lease_seconds):
+        if not task_id or not worker_id or lease_seconds < 1:
+            raise ValueError("Invalid lease renewal request.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (
+                item is None or item["status"] != "leased"
+                or item["lease_owner"] != worker_id
+                or item["lease_expires_at"] <= now
+            ):
+                return False
+            item["lease_expires_at"] = now + timedelta(seconds=lease_seconds)
+            item["updated_at"] = now
+            return True
+
+    def queue_summary(self):
+        with self._lock:
+            summary = {"queued": 0, "leased": 0, "completed": 0, "dead": 0}
+            for item in self.queue.values():
+                summary[item["status"]] = summary.get(item["status"], 0) + 1
+            summary["total"] = sum(summary.values())
+            return summary
 
     def complete_queued_task(self, task_id, worker_id):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
@@ -295,4 +435,4 @@ class InMemoryStore:
 
 
 # Application default: durable SQL storage. InMemoryStore remains test-only.
-store = SQLAlchemyStore()
+store = SQLAlchemyStore(run_migrations=os.getenv("NEXUS_MIGRATION_COMMAND", "").strip().lower() not in {"1", "true", "yes"})
