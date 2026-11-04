@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""One-shot readiness/queue monitor; schedule externally (e.g. every minute)."""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+
+def request(url: str, token: str | None = None):
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=8) as response:
+        return json.loads(response.read())
+
+
+def notify(webhook: str, message: str) -> None:
+    body = json.dumps({"text": message}).encode()
+    req = urllib.request.Request(
+        webhook, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=8):
+        pass
+
+
+def main() -> int:
+    health_url = os.environ.get("NEXUS_READY_URL", "").strip()
+    queue_url = os.environ.get("NEXUS_QUEUE_URL", "").strip()
+    admin_token = os.environ.get("NEXUS_ADMIN_TOKEN", "").strip()
+    webhook = os.environ.get("NEXUS_ALERT_WEBHOOK", "").strip()
+    dead_limit = int(os.environ.get("NEXUS_DEAD_TASK_ALERT_THRESHOLD", "1"))
+    if not all((health_url, queue_url, admin_token, webhook)):
+        print("Required monitor configuration is missing.", file=sys.stderr)
+        return 2
+
+    problems = []
+    try:
+        readiness = request(health_url)
+        if readiness.get("status") != "ready":
+            problems.append("NEXUS readiness check is not ready")
+    except Exception as exc:
+        problems.append(f"NEXUS readiness request failed ({type(exc).__name__})")
+
+    try:
+        queue = request(queue_url, admin_token).get("queue", {})
+        dead = int(queue.get("dead", 0))
+        if dead >= dead_limit:
+            problems.append(f"NEXUS dead-letter queue threshold reached: {dead}")
+    except Exception as exc:
+        problems.append(f"NEXUS admin queue check failed ({type(exc).__name__})")
+
+    if problems:
+        try:
+            notify(webhook, "NEXUS AI CORE alert: " + "; ".join(problems))
+        except Exception as exc:
+            print(f"Alert delivery failed ({type(exc).__name__}).", file=sys.stderr)
+            return 3
+        print(f"Alert delivered ({len(problems)} condition(s)).")
+        return 1
+    print("NEXUS checks passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
