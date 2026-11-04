@@ -6,7 +6,6 @@ from threading import RLock
 from typing import Any
 
 from sqlalchemy import DateTime, Integer, String, create_engine, select
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
 
@@ -63,7 +62,17 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        Base.metadata.create_all(self.engine)
+        self._run_migrations()
+
+    def _run_migrations(self):
+        from alembic import command
+        from alembic.config import Config
+
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False))
+        with self.engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
 
     def save_task(self, task: dict):
         with self._lock, self.sessions.begin() as session:
