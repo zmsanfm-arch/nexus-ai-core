@@ -72,7 +72,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 **Queued-task conditional GO:** the repository now includes a standalone generic advisory worker and a supervised Compose service behind the explicit `worker` profile. It remains opt-in because it sends task content to the configured model provider. Before enabling it, approve the provider/privacy terms, configure credentials, validate the exact-SHA CI and container image, and establish queue/dead-letter alerts. Only `general` tasks are supported; ICT specialist and all execution task types fail closed. Worker lease is 600 seconds by default; three sequential model calls have a maximum configured timeout budget of 360 seconds. Long-running or multi-instance worker scaling still requires lease renewal/heartbeat and PostgreSQL concurrency/load testing.
 
-**Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, supervised worker service, queue idempotency/dead-letter operations, and load/concurrency testing.
+**Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, worker lease heartbeat/renewal, idempotency guarantees, dead-letter alerting/operations, and load/concurrency testing.
 
 **Trading remains disabled.** This runbook does not enable live trading or broker connectivity.
 
