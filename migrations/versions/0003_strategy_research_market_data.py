@@ -41,10 +41,46 @@ def upgrade():
         sa.Column("candles", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
+
     op.create_index("ix_market_datasets_instrument", "market_datasets", ["instrument"])
+
+    immutable_tables = ("strategy_versions", "research_records", "market_datasets")
+    if op.get_bind().dialect.name == "sqlite":
+        for table in immutable_tables:
+            op.execute(
+                f"CREATE TRIGGER trg_{table}_immutable_update "
+                f"BEFORE UPDATE ON {table} BEGIN "
+                "SELECT RAISE(ABORT, 'NEXUS research records are immutable'); END"
+            )
+            op.execute(
+                f"CREATE TRIGGER trg_{table}_immutable_delete "
+                f"BEFORE DELETE ON {table} BEGIN "
+                "SELECT RAISE(ABORT, 'NEXUS research records are immutable'); END"
+            )
+    elif op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            "CREATE OR REPLACE FUNCTION nexus_reject_immutable_mutation() "
+            "RETURNS trigger LANGUAGE plpgsql AS $ "
+            "BEGIN RAISE EXCEPTION 'NEXUS research records are immutable'; END; $"
+        )
+        for table in immutable_tables:
+            op.execute(
+                f"CREATE TRIGGER trg_{table}_immutable "
+                f"BEFORE UPDATE OR DELETE ON {table} "
+                "FOR EACH ROW EXECUTE FUNCTION nexus_reject_immutable_mutation()"
+            )
 
 
 def downgrade():
+    immutable_tables = ("strategy_versions", "research_records", "market_datasets")
+    if op.get_bind().dialect.name == "sqlite":
+        for table in immutable_tables:
+            op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable_update")
+            op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable_delete")
+    elif op.get_bind().dialect.name == "postgresql":
+        for table in immutable_tables:
+            op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_immutable ON {table}")
+        op.execute("DROP FUNCTION IF EXISTS nexus_reject_immutable_mutation()")
     op.drop_index("ix_market_datasets_instrument", table_name="market_datasets")
     op.drop_table("market_datasets")
     op.drop_index("ix_research_records_record_type", table_name="research_records")
