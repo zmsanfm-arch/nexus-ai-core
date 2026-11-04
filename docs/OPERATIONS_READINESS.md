@@ -1,10 +1,22 @@
 # NEXUS AI CORE — Operational Readiness & Deployment Runbook
 
-**Status: NOT APPROVED FOR PUBLIC PRODUCTION.** This runbook prepares a controlled single-host deployment. It does not authorize public launch, paid hosting, external model-provider use, or trading connectivity.
+**Status: NOT APPROVED FOR PUBLIC PRODUCTION.** This runbook prepares a controlled deployment and records current evidence. It does not authorize public launch, external model-provider use, or trading connectivity.
+
+## Current Railway deployment evidence (2026-11-04)
+
+- Main release commit: `2346dab5b83cebd9da3f8f901d92b9c5f4a409d6`.
+- Railway API deployment: `b388b08b-b8c2-4a8b-bc53-024ed0586270`; state `SUCCESS`, one replica online.
+- Railway API service: `nexus-api`; production environment has no public or custom domain attached. DNS/TLS and external firewall verification are operator-owned.
+- The pre-deploy release command is `python scripts/migrate_release.py`. It requires a PostgreSQL `DATABASE_URL`, sets migration flags before importing the application store, runs Alembic explicitly, and performs a database round-trip check.
+- Deployment logs confirm `PostgresqlImpl`, successful upgrades through the current migration chain, application startup, and `GET /ready` returning `200 OK`. API startup uses `NEXUS_SKIP_MIGRATIONS=true` and fails closed unless the database is at the exact migration head.
+- CI run 430 passed on PR #19 candidate SHA `8ac327151818324234ef1287de862e9dc6a7cb42`: Python 3.11 and 3.12 tests, PostgreSQL 16 queue concurrency tests (16 workers / 256 tasks), Docker build and health smoke test, dependency audit, Bandit, and encrypted PostgreSQL backup/restore drill against disposable CI databases.
+- PRs #1–#7 and #9–#19 are merged. PR #8 is closed as superseded. The current production deployment is the merged mainline, not an unmerged draft.
+- Railway recorded earlier failed deployments while the migration release path was being corrected. The latest deployment is successful and has no active warning/critical notifications; historical failures remain visible in Railway's recent-failure window.
+- CI restore evidence is not a production backup schedule, off-host retention, or production-host restore test. Do not claim production RPO/RTO until measured.
 
 ## Current implementation facts
 
-- FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist on the integration branch.
+- FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist in the mainline.
 - ICT Mentor is advisory-only. Broker/MT5 connectivity, account/position access, order execution, and live trading must remain disabled.
 - Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, uses bounded retries/dead-letter handling, and renews owner-checked leases while a task is running. Lease loss is audited and prevents the stale worker from committing a result. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
@@ -16,7 +28,7 @@
 
 ## Deployment package
 
-`docker-compose.production.yml` provides a hardened single-host starting point:
+The active Railway deployment uses the Dockerfile and the one-shot `python scripts/migrate_release.py` release command. The API verifies the exact Alembic head on startup and is not permitted to perform implicit migrations. `docker-compose.production.yml` remains an alternative hardened single-host deployment package:
 - PostgreSQL is private to the Compose network and persists in a named volume.
 - API binds only to host loopback (`127.0.0.1:8000`) behind a separately configured TLS reverse proxy.
 - API container runs non-root, read-only, drops Linux capabilities, and sets `no-new-privileges`.
@@ -27,8 +39,8 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 
 ## Preflight — required before public exposure
 
-1. Review and merge code changes only after independent review and green CI. The stack is PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7 → PR #9 → PR #10 → PR #11 → PR #12 → PR #13 → PR #14 → PR #15 → PR #1. PR #8 is closed as superseded by PR #13. PR #1 is now an incremental child of PR #15; it has been reconciled against the current runtime. To land the full stack without losing dependencies, merge in reverse order into each parent branch, then merge PR #2 into main.
-2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
+1. Core PR chain #1–#7 and #9–#19 is merged; PR #8 is closed as superseded. The latest production release is main commit `2346dab5b83cebd9da3f8f901d92b9c5f4a409d6`. Keep subsequent changes behind green CI and review.
+2. Confirm required CI checks on the exact merge candidate SHA. CI run 430 passed on PR #19 candidate SHA `8ac327151818324234ef1287de862e9dc6a7cb42`; the corresponding merge is deployed successfully. Continue to validate exact candidate SHAs for future changes.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure the opt-in Caddy reverse proxy in `deploy/Caddyfile` after DNS A/AAAA records point to the host. Set `NEXUS_DOMAIN`, open inbound 80/443, validate certificate issuance, and start only the `public` Compose profile. The proxy enforces the configured host, 10 MB request body limit, HTTPS certificate automation, and security headers; API port 8000 remains loopback-only on the host.
 5. Generate independent high-entropy API/admin secrets of at least 32 characters. Store them outside Git; establish rotation and emergency revocation. Do not reuse passwords or leave sample placeholders; production startup rejects these conditions.
@@ -133,19 +145,19 @@ No host, domain, DNS record, certificate, or firewall change is performed by thi
 
 | Area | Status | Required action |
 |---|---|---|
-| PR chain / main integration | Open Draft PRs | Review dependency order; reconcile PR #1 separately |
-| Production deployment | Not deployed; opt-in Caddy TLS proxy configuration prepared | Provision host/DNS/firewall, validate certificate issuance and external exposure only after explicit release approval |
+| PR chain / main integration | Merged through PR #19; PR #8 superseded | Keep future changes behind green CI and review |
+| Production deployment | Railway API online; one replica; `/ready` returned 200 against PostgreSQL; no public domain | Operator to configure approved domain/TLS and verify external firewall/exposure; public launch remains NO-GO |
 | Secrets lifecycle | Startup rejects missing, placeholder, weak (<32 characters), or reused API/admin tokens | External secret manager, rotation, revocation, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
-| Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; PostgreSQL multi-worker load validation |
-| Migrations | Dedicated one-shot Compose release job; PostgreSQL transaction advisory lock; API/worker verify exact schema head and skip implicit migration | Deployment-level migration/rollback drill and verification on the target host |
-| Backups | Not provisioned | Automated encrypted backups and restore drills |
-| Observability | Process liveness, database readiness (`/ready`), and admin-only aggregate queue counts | Metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
+| Worker | Standalone generic advisory entrypoint and opt-in supervised Compose service; CI PostgreSQL claim test covers 16 workers / 256 tasks | Provider/privacy approval, queue/dead-letter alerts, idempotency validation, and production capacity benchmark |
+| Migrations | Railway one-shot `scripts/migrate_release.py` succeeded against PostgreSQL; API verifies exact schema head at startup | Complete deployment-level rollback drill and record release evidence |
+| Backups | Encrypted backup/restore script and disposable PostgreSQL CI drill pass | Provision off-host production backups, retention, key custody, and measured production restore/RPO/RTO |
+| Observability | `/health`, PostgreSQL-backed `/ready`, admin queue summary, Railway resource metrics; no active external alert delivery | Configure external uptime/latency/DB-capacity monitoring, webhook delivery, log retention/redaction, and worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
-| Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
+| Market/research data | Immutable strategy versions, experiment plans, lifecycle history, and historical OHLC datasets are persisted; no broker-grade/live feed | Continue research validation; do not use backtests as execution authorization |
 | Model-provider transport | HTTPS-only remote endpoints, strict URL validation, bounded finite timeouts, redirects disabled | Verify provider TLS/hostname policy and credentials handling during independent security review |
-| Security assurance | CI only | Independent review, threat model, dependency/container scans |
+| Security assurance | CI dependency audit, Bandit, container smoke test, and code-level controls pass; no independent assessment | User-designated independent security/recovery review after internal completion; remediate and retest findings |
 | Trading | Disabled | Keep disabled; no broker/account/order connectivity |
 
 ## Release record template
