@@ -15,7 +15,7 @@ NEXUS AI CORE is a cloud-oriented multi-agent system under active MVP developmen
 
 The integration branch registers ICT Mentor through the central Orchestrator and SpecialistRuntime for five advisory capabilities: education, source lookup, chart analysis, strategy formalization, and trade review. Each dispatch requires both the central PermissionService and the manifest grant.
 
-The handler retrieves source segments from the NEXUS-owned knowledge store, validates provenance, accepts only explicitly user-confirmed rules, and structurally forbids execution results. Knowledge search is a lexical baseline, not semantic retrieval.
+The handler retrieves source segments from the NEXUS-owned knowledge store, validates provenance, accepts only explicitly user-confirmed rules, and structurally forbids execution results. Knowledge search uses an indexed lexical baseline with Persian/Arabic Unicode normalization; it is not semantic/vector retrieval.
 
 **Trading boundary:** ICT Mentor is advisory-only. Position monitoring, position management, autonomous execution, MT5/broker connectivity, account/position access, order placement/cancellation, and live trading remain disabled. Backtesting is deterministic research-only midpoint OHLC simulation, not broker-grade execution simulation and never authorizes a trade.
 
@@ -38,7 +38,7 @@ Without the required model settings, model-dependent tasks return blocked; they 
 - `POST /tasks` executes through the synchronous orchestration path.
 - `POST /tasks/queued` durably enqueues a task.
 - `GET /tasks/{task_id}` returns a task only to its owning API principal.
-- Worker primitives implement leases, retries, ownership checks, and dead-letter state.
+- Worker lifecycle primitives implement leases, retries, ownership checks, and dead-letter state; a standalone worker entrypoint and supervised production service are not yet provided.
 
 The repository contains queue and worker lifecycle primitives, but no continuously supervised worker deployment. A production deployment must run a separately supervised worker with an approved task handler. SQLite is for a single-instance MVP; use PostgreSQL before multi-instance workers.
 
