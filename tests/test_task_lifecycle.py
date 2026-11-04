@@ -105,7 +105,6 @@ def test_queue_summary_reports_all_lifecycle_states():
     lease = store.claim_next_task("worker-summary", lease_seconds=30)
     assert lease["task_id"] == first["id"]
     store.complete_queued_task(first["id"], "worker-summary")
-    store.fail_queued_task(second["id"], "missing-worker", "not-owned") if False else None
     summary = store.queue_summary()
     assert summary == {"queued": 1, "leased": 0, "completed": 1, "dead": 0, "total": 2}
 
