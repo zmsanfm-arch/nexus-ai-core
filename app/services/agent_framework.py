@@ -52,7 +52,7 @@ clarifications are needed; block when it is unsafe or materially unreliable.""",
     ),
 )
 
-MAX_REVISION_ROUNDS = 2
+MAX_REVISION_ROUNDS = 2\nMAX_TOTAL_AGENT_ATTEMPTS = 3 + (2 * MAX_REVISION_ROUNDS)
 
 
 def _parse_result(raw: str, agent_id: str) -> dict:
