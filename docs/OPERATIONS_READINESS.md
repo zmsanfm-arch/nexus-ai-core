@@ -6,7 +6,7 @@
 
 - FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist on the integration branch.
 - ICT Mentor is advisory-only. Broker/MT5 connectivity, account/position access, order execution, and live trading must remain disabled.
-- Durable queue storage/lease primitives and a tested injectable `TaskWorker` lifecycle (claim, lease, bounded retries, dead-letter, audit) exist; however, no standalone worker entrypoint, approved production task handler, or supervised worker service is provided.
+- Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, and uses bounded retries/dead-letter handling. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
 - Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
 - `/health` is process liveness only. It does not prove database readiness, provider reachability, or worker health.
@@ -50,6 +50,8 @@ chmod 600 .env.production
 docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
 docker compose --env-file .env.production -f docker-compose.production.yml build
 docker compose --env-file .env.production -f docker-compose.production.yml up -d
+# Only after model-provider approval/configuration, opt in to queued-task processing:
+docker compose --env-file .env.production -f docker-compose.production.yml --profile worker up -d worker
 docker compose --env-file .env.production -f docker-compose.production.yml ps
 docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=100 api
 ```
@@ -68,7 +70,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 **NO-GO until all are true:** reviewed/merged PR chain; exact-SHA CI green; independent security review complete; TLS/firewall verified; secrets stored and rotation tested; PostgreSQL backups/restores tested; migration procedure controlled; monitoring/alerts active; auth/rate limits validated; incident and rollback drills completed.
 
-**Queued-task NO-GO:** `POST /tasks/queued` must not be treated as operational until a standalone worker entrypoint, approved task handler, supervised service, and queue failure/dead-letter monitoring are provided. The synchronous `POST /tasks` path remains the available execution path.
+**Queued-task conditional GO:** the repository now includes a standalone generic advisory worker and a supervised Compose service behind the explicit `worker` profile. It remains opt-in because it sends task content to the configured model provider. Before enabling it, approve the provider/privacy terms, configure credentials, validate the exact-SHA CI and container image, and establish queue/dead-letter alerts. Only `general` tasks are supported; ICT specialist and all execution task types fail closed. Worker lease is 600 seconds by default; three sequential model calls have a maximum configured timeout budget of 360 seconds. Long-running or multi-instance worker scaling still requires lease renewal/heartbeat and PostgreSQL concurrency/load testing.
 
 **Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, supervised worker service, queue idempotency/dead-letter operations, and load/concurrency testing.
 
@@ -83,7 +85,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Secrets lifecycle | Basic env configuration | Secret manager, rotation, revocation, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
-| Worker | Queue/lease primitives and injectable `TaskWorker` lifecycle tests | Standalone entrypoint, approved handler, supervised service, idempotency and dead-letter monitoring |
+| Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; lease renewal before workloads can exceed the configured lease |
 | Migrations | Alembic at startup | Dedicated migration job/lock before multi-instance use |
 | Backups | Not provisioned | Automated encrypted backups and restore drills |
 | Observability | Basic health endpoint | DB readiness, metrics, traces, alerts, redacted logs |
