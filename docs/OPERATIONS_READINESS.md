@@ -8,6 +8,7 @@
 - ICT Mentor is advisory-only. Broker/MT5 connectivity, account/position access, order execution, and live trading must remain disabled.
 - Durable queue storage/lease primitives, a standalone `python -m app.worker_entrypoint` process, an opt-in Compose worker service, and a generic advisory handler are provided. The worker rejects unregistered specialist/execution task types, preserves non-pass auditor verdicts as blocked tasks, uses bounded retries/dead-letter handling, and renews owner-checked leases while a task is running. Lease loss is audited and prevents the stale worker from committing a result. It requires an explicitly configured model provider and is not activated by the default Compose profile.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
+- Model-provider transport rejects non-HTTPS remote URLs, embedded URL credentials, query strings/fragments, invalid ports, and non-finite/out-of-range timeouts; automatic redirects are disabled to prevent bearer-token forwarding.
 - Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
 - `/health` is process liveness only. `/ready` executes `SELECT 1` against the configured database and returns HTTP 503 when persistence is unavailable. Neither endpoint proves provider reachability or worker health. Admin-only `GET /admin/queue` reports aggregate queued/leased/completed/dead counts without exposing task payloads or failure details.
 - Production Compose now runs Alembic as a one-shot `migrate` service before API startup. PostgreSQL migrations acquire a transaction-scoped advisory lock; API and worker startup use `NEXUS_SKIP_MIGRATIONS=true` and fail closed unless the database is already at the exact application migration head. Keep this release-job ordering in place for every deployment.
@@ -26,7 +27,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 
 ## Preflight — required before public exposure
 
-1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
+1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7 → PR #9 → PR #10 → PR #11 → PR #12 → PR #13. PR #8's unique transport changes are reconciled by PR #13; do not merge PR #8's divergent branch wholesale. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
 2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure TLS reverse proxy with valid certificates, strict host allow-list, request/body size limits, and forwarding headers trusted only from the local proxy.
@@ -91,6 +92,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Observability | Process liveness, database readiness (`/ready`), and admin-only aggregate queue counts | Metrics, traces, alerts/delivery, redacted logs, worker heartbeat |
 | Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
 | Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
+| Model-provider transport | HTTPS-only remote endpoints, strict URL validation, bounded finite timeouts, redirects disabled | Verify provider TLS/hostname policy and credentials handling during independent security review |
 | Security assurance | CI only | Independent review, threat model, dependency/container scans |
 | Trading | Disabled | Keep disabled; no broker/account/order connectivity |
 
