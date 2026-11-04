@@ -69,7 +69,7 @@ class SQLAlchemyStore:
         from alembic.config import Config
 
         config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-        config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False))
+        config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False).replace("%", "%%"))
         with self.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
