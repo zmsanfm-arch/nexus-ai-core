@@ -108,24 +108,30 @@ def evaluate_acceptance(
     ]
     for name, actual, predicate, integer in checks:
         limit = criteria.get(name)
-        if limit is None or actual is None:
+        if limit is None:
+            unevaluable.append(name)
+            continue
+        limit = finite_number(name, limit, integer=integer)
+        if name == "minimum_profit_factor" and limit < 0:
+            raise ValueError("minimum_profit_factor cannot be negative")
+        if name == "maximum_drawdown" and not 0 <= limit <= 1:
+            raise ValueError("maximum_drawdown must be between 0 and 1")
+        if actual is None:
             unevaluable.append(name)
         else:
-            limit = finite_number(name, limit, integer=integer)
-            if name == "minimum_profit_factor" and limit < 0:
-                raise ValueError("minimum_profit_factor cannot be negative")
-            if name == "maximum_drawdown" and not 0 <= limit <= 1:
-                raise ValueError("maximum_drawdown must be between 0 and 1")
             (passed if predicate(actual, limit) else failed).append(name)
 
     min_expectancy = criteria.get("minimum_expectancy_r")
     expectancy_r = evaluation.expectancy_r if expectancy_r is None else expectancy_r
-    if min_expectancy is None or expectancy_r is None:
+    if min_expectancy is None:
         unevaluable.append("minimum_expectancy_r")
     else:
         min_expectancy = finite_number("minimum_expectancy_r", min_expectancy)
-        expectancy_r = finite_number("expectancy_r", expectancy_r)
-        (passed if expectancy_r >= min_expectancy else failed).append("minimum_expectancy_r")
+        if expectancy_r is None:
+            unevaluable.append("minimum_expectancy_r")
+        else:
+            expectancy_r = finite_number("expectancy_r", expectancy_r)
+            (passed if expectancy_r >= min_expectancy else failed).append("minimum_expectancy_r")
 
     robustness_required = criteria.get("robustness_required", False)
     if not isinstance(robustness_required, bool):
