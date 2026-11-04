@@ -95,3 +95,28 @@ def test_worker_fails_closed_when_handler_omits_auditor_verdict():
     assert worker.run_once() is True
     assert store.get_task(task["id"])["status"] == "blocked"
     assert store.queue[task["id"]]["status"] == "completed"
+
+
+def test_queue_summary_reports_all_lifecycle_states():
+    store = InMemoryStore()
+    queue = TaskQueueService(store)
+    first = queue.enqueue("Queue the first task")
+    second = queue.enqueue("Queue the second task")
+    lease = store.claim_next_task("worker-summary", lease_seconds=30)
+    assert lease["task_id"] == first["id"]
+    store.complete_queued_task(first["id"], "worker-summary")
+    store.fail_queued_task(second["id"], "missing-worker", "not-owned") if False else None
+    summary = store.queue_summary()
+    assert summary == {"queued": 1, "leased": 0, "completed": 1, "dead": 0, "total": 2}
+
+
+def test_sql_queue_summary_reports_durable_status_counts(tmp_path):
+    store = SQLAlchemyStore(f"sqlite:///{tmp_path / 'queue-summary.db'}")
+    queue = TaskQueueService(store)
+    first = queue.enqueue("Queue the SQL task")
+    lease = store.claim_next_task("worker-sql-summary", lease_seconds=30)
+    assert lease["task_id"] == first["id"]
+    assert store.queue_summary() == {
+        "queued": 0, "leased": 1, "completed": 0, "dead": 0, "total": 1
+    }
+    store.close()
