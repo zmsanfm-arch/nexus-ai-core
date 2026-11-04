@@ -47,11 +47,11 @@ Run from the repository root on the target host after approval and provisioning:
 cp .env.production.example .env.production
 chmod 600 .env.production
 # Edit .env.production locally on the host; use unique generated secrets.
-docker compose -f docker-compose.production.yml config --quiet
-docker compose -f docker-compose.production.yml build
-docker compose -f docker-compose.production.yml up -d
-docker compose -f docker-compose.production.yml ps
-docker compose -f docker-compose.production.yml logs --tail=100 api
+docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
+docker compose --env-file .env.production -f docker-compose.production.yml build
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+docker compose --env-file .env.production -f docker-compose.production.yml ps
+docker compose --env-file .env.production -f docker-compose.production.yml logs --tail=100 api
 ```
 
 Do not paste secrets into shell history, chat, GitHub issues, or logs. The sample file contains placeholders only.
