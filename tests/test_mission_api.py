@@ -87,9 +87,6 @@ def test_mission_reads_are_principal_scoped(monkeypatch):
     created = client.post("/missions", json=mission_payload(), headers=headers)
     assert created.status_code == 200
 
-    from app import main
-    main.mission_repository = main.mission_repository
-
     monkeypatch.setenv("NEXUS_API_CLIENT_ID", "client-b")
     response = client.get("/missions/demo_mission", headers=headers)
     assert response.status_code == 404
