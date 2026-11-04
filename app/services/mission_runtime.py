@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.services.mission_audit import MissionAuditResult
 from app.services.mission_contract import MissionDefinition, compile_mission
 from app.services.permissions import PermissionDenied, PermissionService
 from app.services.specialist_contract import SpecialistInput, SpecialistResult
@@ -17,17 +18,22 @@ class MissionExecutionError(RuntimeError):
 
 
 class MissionRuntime:
-    """Executes enabled advisory specialists after independent policy checks.
+    """Executes advisory specialists and optionally requires a separate auditor.
 
     Execution is sequential. A node is eligible only after all dependencies
     succeeded, and each node is bounded by its declared max_attempts.
+    The final auditor is injected separately and is never selected as a node
+    handler by this runtime.
     """
 
-    def __init__(self, registry, storage, handlers, permission_service=None):
+    def __init__(
+        self, registry, storage, handlers, permission_service=None, auditor=None
+    ):
         self.registry = registry
         self.storage = storage
         self.handlers = dict(handlers)
         self.permission_service = permission_service or PermissionService()
+        self.auditor = auditor
 
     def _audit(self, event: str, mission: MissionDefinition, **fields: Any) -> None:
         self.storage.append_audit({
@@ -85,7 +91,6 @@ class MissionRuntime:
                 },
             )
             succeeded = False
-            last_error = "handler_failed"
             for attempt in range(1, mission_node.max_attempts + 1):
                 attempts_used += 1
                 self._audit(
@@ -106,7 +111,10 @@ class MissionRuntime:
                         raise MissionExecutionError("result_identity_or_mode_mismatch")
                     if result.execution_result is not None:
                         raise MissionExecutionError("execution_result_forbidden")
-                    outputs[node.node_id] = result.model_dump(mode="json")
+                    output = result.model_dump(mode="json")
+                    if len(json.dumps(output, ensure_ascii=False).encode("utf-8")) > 16_384:
+                        raise MissionExecutionError("specialist_output_too_large")
+                    outputs[node.node_id] = output
                     self._audit(
                         "mission_node_completed",
                         mission,
@@ -118,7 +126,6 @@ class MissionRuntime:
                     succeeded = True
                     break
                 except Exception as exc:
-                    last_error = type(exc).__name__
                     self._audit(
                         "mission_node_attempt_failed",
                         mission,
@@ -126,7 +133,7 @@ class MissionRuntime:
                         node_id=node.node_id,
                         agent_id=node.agent_id,
                         attempt=attempt,
-                        error_type=last_error,
+                        error_type=type(exc).__name__,
                     )
             if not succeeded:
                 self._audit(
@@ -147,20 +154,77 @@ class MissionRuntime:
                     "final_audit": "not_performed",
                 }
 
+        if self.auditor is None:
+            self._audit(
+                "mission_nodes_succeeded",
+                mission,
+                task_id=task_id,
+                attempts_used=attempts_used,
+                final_audit="not_performed",
+            )
+            return {
+                "status": "nodes_succeeded",
+                "mission_id": mission.mission_id,
+                "task_id": task_id,
+                "outputs": outputs,
+                "attempts_used": attempts_used,
+                "final_audit": "not_performed",
+            }
+
+        try:
+            audit_payload = json.dumps(
+                {"mission_id": mission.mission_id, "objective": mission.objective,
+                 "outputs": outputs},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            if len(audit_payload.encode("utf-8")) > 32_768:
+                raise MissionExecutionError("audit_input_too_large")
+            raw_audit = self.auditor.audit(mission=mission, outputs=outputs)
+            audit = MissionAuditResult.model_validate(raw_audit)
+        except Exception as exc:
+            self._audit(
+                "mission_final_audit_failed",
+                mission,
+                task_id=task_id,
+                error_type=type(exc).__name__,
+            )
+            return {
+                "status": "audit_failed",
+                "mission_id": mission.mission_id,
+                "task_id": task_id,
+                "outputs": outputs,
+                "attempts_used": attempts_used,
+                "final_audit": "failed",
+            }
+
         self._audit(
-            "mission_nodes_succeeded",
+            "mission_final_audit_completed",
             mission,
             task_id=task_id,
+            verdict=audit.verdict,
+            findings_count=len(audit.findings),
+            limitations_count=len(audit.limitations),
+        )
+        status = {
+            "pass": "completed",
+            "revise": "review_required",
+            "block": "blocked",
+        }[audit.verdict]
+        self._audit(
+            "mission_execution_finished",
+            mission,
+            task_id=task_id,
+            status=status,
             attempts_used=attempts_used,
-            final_audit="not_performed",
         )
         return {
-            "status": "nodes_succeeded",
+            "status": status,
             "mission_id": mission.mission_id,
             "task_id": task_id,
             "outputs": outputs,
             "attempts_used": attempts_used,
-            "final_audit": "not_performed",
+            "final_audit": audit.model_dump(mode="json"),
         }
 
     def _blocked(self, mission, task_id, node_id, reason, outputs):
