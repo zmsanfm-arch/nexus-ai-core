@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, create_engine, func, select
+from sqlalchemy import DateTime, Integer, String, create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.types import JSON
 
@@ -73,6 +73,12 @@ class SQLAlchemyStore:
         with self.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
+
+    def check_database(self):
+        """Execute a minimal round-trip query against the configured database."""
+        with self.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return True
 
     def save_task(self, task: dict):
         with self._lock, self.sessions.begin() as session:
@@ -244,6 +250,10 @@ class InMemoryStore:
         self.audit = []
         self.queue = {}
         self._lock = RLock()
+
+    def check_database(self):
+        """The in-memory test store is always available while instantiated."""
+        return True
 
     def save_task(self, task):
         with self._lock:
