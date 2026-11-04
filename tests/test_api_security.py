@@ -160,3 +160,58 @@ def test_queue_status_returns_aggregate_counts_only(client, monkeypatch):
     assert response.json() == {
         "queue": {"queued": 2, "leased": 1, "completed": 4, "dead": 1, "total": 8}
     }
+
+
+def test_api_principal_rate_limit_returns_429_and_retry_after(monkeypatch):
+    from app import main
+
+    monkeypatch.setenv("NEXUS_API_TOKEN", "rate-limit-api-token")
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "rate-limit-test-principal")
+    monkeypatch.setenv("NEXUS_API_RATE_LIMIT_PER_MINUTE", "1")
+    client = TestClient(app)
+
+    first = client.get(
+        "/agents",
+        headers={"Authorization": "Bearer rate-limit-api-token"},
+    )
+    second = client.get(
+        "/agents",
+        headers={"Authorization": "Bearer rate-limit-api-token"},
+    )
+
+    assert first.status_code == 200
+    assert first.headers["X-RateLimit-Limit"] == "1"
+    assert second.status_code == 429
+    assert int(second.headers["Retry-After"]) >= 1
+    assert second.headers["X-RateLimit-Remaining"] == "0"
+
+
+def test_admin_principal_has_separate_rate_limit(monkeypatch):
+    from app import main
+
+    monkeypatch.setenv("NEXUS_ADMIN_TOKEN", "rate-limit-admin-token")
+    monkeypatch.setenv("NEXUS_ADMIN_ID", "rate-limit-admin")
+    monkeypatch.setenv("NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE", "1")
+    monkeypatch.setattr(main.store, "queue_summary", lambda: {
+        "queued": 0, "leased": 0, "completed": 0, "dead": 0, "total": 0
+    })
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer rate-limit-admin-token"}
+
+    assert client.get("/admin/queue", headers=headers).status_code == 200
+    blocked = client.get("/admin/queue", headers=headers)
+    assert blocked.status_code == 429
+    assert int(blocked.headers["Retry-After"]) >= 1
+
+
+def test_health_and_readiness_probes_are_exempt_from_principal_limits(monkeypatch):
+    monkeypatch.setenv("NEXUS_API_TOKEN", "health-exempt-token")
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "health-exempt-principal")
+    monkeypatch.setenv("NEXUS_API_RATE_LIMIT_PER_MINUTE", "1")
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer health-exempt-token"}
+
+    assert client.get("/health", headers=headers).status_code == 200
+    assert client.get("/health", headers=headers).status_code == 200
+    assert client.get("/ready", headers=headers).status_code == 200
+    assert client.get("/ready", headers=headers).status_code == 200
