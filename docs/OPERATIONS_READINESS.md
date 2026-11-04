@@ -20,7 +20,7 @@
 - API binds only to host loopback (`127.0.0.1:8000`) behind a separately configured TLS reverse proxy.
 - API container runs non-root, read-only, drops Linux capabilities, and sets `no-new-privileges`.
 - Docker image includes Alembic configuration and migration scripts.
-- Production secrets are supplied through host-only `.env.production`; never commit it.
+- Production secrets are supplied through host-only `.env.production`; never commit it. The API startup preflight rejects missing, placeholder, weak, or reused API/admin tokens, non-PostgreSQL production storage, and startup without the dedicated migration-verification mode.
 
 This is not a substitute for host hardening, firewall rules, TLS, backups, monitoring, and independent security review.
 
@@ -30,7 +30,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure TLS reverse proxy with valid certificates, strict host allow-list, request/body size limits, and forwarding headers trusted only from the local proxy.
-5. Generate independent high-entropy API/admin secrets. Store them outside Git; establish rotation and emergency revocation. Do not reuse passwords.
+5. Generate independent high-entropy API/admin secrets of at least 32 characters. Store them outside Git; establish rotation and emergency revocation. Do not reuse passwords or leave sample placeholders; production startup rejects these conditions.
 6. Provision PostgreSQL with least-privilege credentials, encrypted storage, restricted network access, automated backups, retention, and a tested restore procedure.
 7. Validate `.env.production` and run Compose config validation without printing secrets into logs or tickets.
 8. Run the one-shot migration release job and verify its successful exit and Alembic head before starting the API. Compose enforces this dependency (`service_completed_successfully`); the API refuses to start against a missing or stale schema. Check liveness, database readiness, authenticated API access, admin route isolation, and persistence.
@@ -82,7 +82,7 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 |---|---|---|
 | PR chain / main integration | Open Draft PRs | Review dependency order; reconcile PR #1 separately |
 | Production deployment | Not deployed | Provision host/TLS/firewall only after explicit release approval |
-| Secrets lifecycle | Basic env configuration | Secret manager, rotation, revocation, audit |
+| Secrets lifecycle | Startup rejects missing, placeholder, weak (<32 characters), or reused API/admin tokens | External secret manager, rotation, revocation, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
 | Worker | Standalone generic advisory entrypoint, opt-in supervised Compose service, bounded retries, dead-letter state, audit; specialist/execution task types rejected | Provider/privacy approval, queue/dead-letter alerts, idempotency and concurrency/load testing; PostgreSQL multi-worker load validation |
