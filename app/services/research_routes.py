@@ -125,6 +125,16 @@ def register_research_routes(app, storage, require_api_access, require_admin):
     ):
         data = payload.data
         _validate_contract("experiment-plan.schema.json", data)
+        if len(data["experiment_id"]) > 128:
+            raise HTTPException(status_code=422, detail="Experiment ID must not exceed 128 characters")
+        if research.get_strategy_version(data["strategy_id"], data["strategy_version"]) is None:
+            raise HTTPException(status_code=409, detail="Experiment references an unregistered strategy version")
+        scope = data["data_scope"]
+        dataset = research.get_market_dataset(scope["dataset_id"])
+        if dataset is None:
+            raise HTTPException(status_code=409, detail="Experiment references an unregistered market dataset")
+        if dataset["instrument"] != scope["instrument"] or dataset["timeframe"] not in scope["timeframe_coverage"]:
+            raise HTTPException(status_code=422, detail="Experiment scope does not match its market dataset")
         try:
             research.save_research_record("experiment", data["experiment_id"], data)
         except ValueError as exc:
