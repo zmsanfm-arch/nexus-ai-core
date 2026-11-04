@@ -44,6 +44,16 @@ def validate_production_environment(environ: Mapping[str, str] | None = None) ->
     if database_url and not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         errors.append("production DATABASE_URL must use PostgreSQL")
 
+    for key, default in (("NEXUS_API_RATE_LIMIT_PER_MINUTE", 600), ("NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE", 300)):
+        raw_limit = values.get(key, str(default)).strip()
+        try:
+            limit = int(raw_limit)
+        except ValueError:
+            errors.append(f"{key} must be an integer")
+            continue
+        if limit < 1 or limit > 100000:
+            errors.append(f"{key} must be between 1 and 100000")
+
     skip_migrations = values.get("NEXUS_SKIP_MIGRATIONS", "").strip().lower()
     if skip_migrations not in _TRUE_VALUES:
         errors.append("production API must use the dedicated migration release job")

@@ -12,6 +12,7 @@ from app.services.governance import GovernanceService
 from app.services.model_router import ModelRouter
 from app.storage import store
 from app.production_config import validate_production_environment
+from app.rate_limit import PrincipalRateLimiter
 from app.services.task_lifecycle import TaskQueueService
 from app.services.knowledge_store import KnowledgeStoreAdapter
 from app.services.research_routes import register_research_routes
@@ -24,6 +25,59 @@ app = FastAPI(
     version="0.2.0",
     description="Autonomous multi-agent system foundation",
 )
+
+principal_rate_limiter = PrincipalRateLimiter()
+
+
+def _configured_rate_limit(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    return value if 1 <= value <= 100000 else default
+
+
+@app.middleware("http")
+async def enforce_principal_rate_limit(request, call_next):
+    # Health probes must remain available even when an authenticated client
+    # exhausts its request budget.
+    if request.url.path in {"/health", "/ready"}:
+        return await call_next(request)
+
+    scheme, _, supplied_token = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not supplied_token:
+        return await call_next(request)
+
+    admin_token = os.getenv("NEXUS_ADMIN_TOKEN", "")
+    api_token = os.getenv("NEXUS_API_TOKEN", "")
+    if admin_token and hmac.compare_digest(supplied_token, admin_token):
+        principal = "admin:" + os.getenv("NEXUS_ADMIN_ID", "admin")
+        limit = _configured_rate_limit("NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE", 300)
+    elif api_token and hmac.compare_digest(supplied_token, api_token):
+        principal = "api:" + os.getenv("NEXUS_API_CLIENT_ID", "api-client")
+        limit = _configured_rate_limit("NEXUS_API_RATE_LIMIT_PER_MINUTE", 600)
+    else:
+        # Invalid credentials are rejected by route authentication; never
+        # retain or log the supplied credential in the limiter.
+        return await call_next(request)
+
+    allowed, retry_after, remaining = principal_rate_limiter.check(principal, limit)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded"},
+            headers={
+                "Retry-After": str(retry_after),
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+            },
+        )
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
+
 
 registry = AgentRegistry()
 governance = GovernanceService(store)

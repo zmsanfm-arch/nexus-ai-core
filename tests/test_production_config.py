@@ -53,3 +53,19 @@ def test_validation_errors_never_include_secret_values():
     env["NEXUS_API_TOKEN"] = "top-secret-placeholder"
     errors = validate_production_environment(env)
     assert "top-secret-placeholder" not in " ".join(errors)
+
+
+def test_production_rate_limits_must_be_positive_bounded_integers():
+    env = valid_environment()
+    env["NEXUS_API_RATE_LIMIT_PER_MINUTE"] = "0"
+    env["NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE"] = "not-a-number"
+    errors = validate_production_environment(env)
+    assert any("NEXUS_API_RATE_LIMIT_PER_MINUTE" in item for item in errors)
+    assert any("NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE" in item for item in errors)
+
+
+def test_production_rate_limits_accept_configured_positive_values():
+    env = valid_environment()
+    env["NEXUS_API_RATE_LIMIT_PER_MINUTE"] = "1200"
+    env["NEXUS_ADMIN_RATE_LIMIT_PER_MINUTE"] = "600"
+    assert validate_production_environment(env) == []
