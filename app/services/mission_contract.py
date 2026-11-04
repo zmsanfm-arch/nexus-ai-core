@@ -26,6 +26,7 @@ class MissionNode(BaseModel):
 
     node_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
     agent_id: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    capability: str = Field(pattern=r"^[a-z][a-z0-9_.]{1,127}$")
     dependencies: tuple[str, ...] = ()
     max_attempts: int = Field(default=1, ge=1, le=8)
 
