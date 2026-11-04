@@ -22,8 +22,8 @@ def upgrade():
         sa.Column("data", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("mission_id", "principal_id", "idempotency_key", name="uq_mission_run_idempotency"),
         sa.Column("idempotency_key", sa.String(128), nullable=False),
+        sa.UniqueConstraint("mission_id", "principal_id", "idempotency_key", name="uq_mission_run_idempotency"),
     )
     op.create_table(
         "mission_node_runs",
