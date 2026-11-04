@@ -79,3 +79,20 @@ pip install pytest
 uvicorn app.main:app --reload
 pytest -q
 ```
+
+## Strategy research and historical market data
+
+- Strategy specifications are schema-validated and immutable; lifecycle transitions require deterministic evidence gates and are centrally audited.
+- Research experiment plans are immutable and schema-validated.
+- Historical OHLC CSV datasets are imported with strict bounds, timestamp/price validation, quality reporting, SHA-256 identity, and immutable storage. Dataset reads are paginated.
+- Research and market-data APIs are authenticated; writes require the administrator role. Demo promotion remains disabled and no broker/live execution capability is introduced.
+
+### APIs
+
+- `POST /strategies/{strategy_id}/versions` and `GET /strategies/{strategy_id}/versions/{version}`
+- `POST /strategies/{strategy_id}/versions/{version}/transitions` and `GET /strategies/{strategy_id}/versions/{version}/transitions`
+- `POST /research/experiments` and `GET /research/experiments/{experiment_id}`
+- `POST /market-data/datasets` (multipart CSV; maximum 5 MiB and 10,000 rows)
+- `GET /market-data/datasets/{dataset_id}` and `GET /market-data/datasets/{dataset_id}/candles`
+
+Market datasets are research inputs only. Backtest or lifecycle evidence cannot authorize demo or live trading.

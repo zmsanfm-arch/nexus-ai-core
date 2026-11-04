@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
+
+import httpx
 
 
 def validate_https_url(value: str, setting: str) -> str:
@@ -30,21 +30,23 @@ def validate_https_url(value: str, setting: str) -> str:
 
 
 def request(url: str, token: str | None = None):
+    url = validate_https_url(url, "monitor endpoint")
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=8) as response:
-        return json.loads(response.read())
+    response = httpx.get(
+        url, headers=headers, timeout=8.0, follow_redirects=False
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def notify(webhook: str, message: str) -> None:
-    body = json.dumps({"text": message}).encode()
-    req = urllib.request.Request(
-        webhook, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    webhook = validate_https_url(webhook, "alert webhook")
+    response = httpx.post(
+        webhook, json={"text": message}, timeout=8.0, follow_redirects=False
     )
-    with urllib.request.urlopen(req, timeout=8):
-        pass
+    response.raise_for_status()
 
 
 def main() -> int:

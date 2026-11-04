@@ -19,7 +19,7 @@ def test_sqlite_schema_is_created_by_versioned_migration_and_is_idempotent(tmp_p
     inspector = inspect(first.engine)
     assert EXPECTED_TABLES.issubset(set(inspector.get_table_names()))
     with first.engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0002_knowledge_terms"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
     first.save_task({"id": "persisted-task", "status": "queued"})
     first.close()
 
@@ -54,7 +54,7 @@ def test_postgres_migrations_and_concurrent_queue_claims():
     store = SQLAlchemyStore(os.environ["NEXUS_TEST_POSTGRES_URL"])
     try:
         with store.engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0002_knowledge_terms"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0003_research_market_data"
 
         for task_id in ("pg-queue-1", "pg-queue-2"):
             store.enqueue_task({"id": task_id, "objective": "database concurrency test"})

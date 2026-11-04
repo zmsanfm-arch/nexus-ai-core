@@ -27,7 +27,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 
 ## Preflight — required before public exposure
 
-1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7 → PR #9 → PR #10 → PR #11 → PR #12 → PR #13. PR #8's unique transport changes are reconciled by PR #13; do not merge PR #8's divergent branch wholesale. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
+1. Review and merge code changes only after independent review and green CI. The stack is PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7 → PR #9 → PR #10 → PR #11 → PR #12 → PR #13 → PR #14 → PR #15 → PR #1. PR #8 is closed as superseded by PR #13. PR #1 is now an incremental child of PR #15; it has been reconciled against the current runtime. To land the full stack without losing dependencies, merge in reverse order into each parent branch, then merge PR #2 into main.
 2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure the opt-in Caddy reverse proxy in `deploy/Caddyfile` after DNS A/AAAA records point to the host. Set `NEXUS_DOMAIN`, open inbound 80/443, validate certificate issuance, and start only the `public` Compose profile. The proxy enforces the configured host, 10 MB request body limit, HTTPS certificate automation, and security headers; API port 8000 remains loopback-only on the host.
@@ -66,6 +66,8 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 ### Encrypted PostgreSQL backup
 
 The repository provides `scripts/backup_postgres_encrypted.sh`. Install PostgreSQL client tools and age on the trusted host, provide `DATABASE_URL`, and set `AGE_RECIPIENT` to the public age recipient. The script writes a mode-0600 encrypted custom-format dump and SHA-256 sidecar into a mode-0700 directory. Store copies off-host in an access-controlled location with provider-side encryption and retention. Do not store the age identity/private key beside the backups.
+
+The CI pipeline also performs an end-to-end drill against a disposable PostgreSQL service: it creates an age-encrypted dump, verifies the checksum, restores into an isolated `nexus_restore_*` database, and checks a known restored row. This validates the scripts in ephemeral CI; it does not replace a production-host restore drill, off-host retention, or measured RPO/RTO.
 
 Example (run on the host; values are not to be pasted into chat or shell history):
 
