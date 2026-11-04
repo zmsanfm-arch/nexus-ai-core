@@ -72,6 +72,18 @@ jobs:
           age-keygen -o "${identity_file}"
           chmod 600 "${identity_file}"
           recipient="$(age-keygen -y "${identity_file}")"
+          pg16_bin="${RUNNER_TEMP}/postgres16-client"
+          mkdir -p "${pg16_bin}"
+          cat > "${pg16_bin}/pg_dump" <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm --network host -e PGPASSWORD="${PGPASSWORD:-}" postgres:16 pg_dump "$@"
+          SH
+          cat > "${pg16_bin}/pg_restore" <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm --network host -i -e PGPASSWORD="${PGPASSWORD:-}" postgres:16 pg_restore "$@"
+          SH
+          chmod 700 "${pg16_bin}/pg_dump" "${pg16_bin}/pg_restore"
+          export PATH="${pg16_bin}:${PATH}"
           DATABASE_URL="${source_url}" AGE_RECIPIENT="${recipient}" BACKUP_DIR="${backup_dir}" \
             bash scripts/backup_postgres_encrypted.sh
           backup_file="$(find "${backup_dir}" -maxdepth 1 -type f -name '*.dump.age' -print -quit)"
