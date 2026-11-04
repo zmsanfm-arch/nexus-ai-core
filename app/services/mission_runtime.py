@@ -47,11 +47,13 @@ class MissionRuntime:
             attempt_budget=plan.max_attempts,
         )
 
+        mission_nodes = {item.node_id: item for item in mission.nodes}
         outputs: dict[str, dict] = {}
         attempts_used = 0
         for node in plan.ordered_nodes:
+            mission_node = mission_nodes[node.node_id]
             agent = agents[node.agent_id]
-            capability = node.capability
+            capability = mission_node.capability
             if agent.get("status") != "registered":
                 return self._blocked(mission, task_id, node.node_id, "agent_disabled", outputs)
             if agent.get("mode") != "advisory":
