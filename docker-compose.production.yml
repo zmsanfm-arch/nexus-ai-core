@@ -41,6 +41,7 @@ services:
     # Keep one API replica until migrations move to a dedicated release job.
 
   worker:
+    profiles: ["worker"]
     build:
       context: .
       dockerfile: Dockerfile
