@@ -10,7 +10,7 @@ A specialist must not create a parallel orchestrator, call brokers directly, hol
 
 Every specialist declares its ID, name, semantic version, lifecycle status, advisory mode, capabilities, granted permissions, and (where applicable) requested permissions.
 
-Requested permissions are not grants. Central policy must independently allow the capability-to-permission mapping and the manifest must explicitly list the same permission under permissions. ICT Mentor currently has an empty grant list and is disabled.
+Requested permissions are not grants. Central policy must independently allow the capability-to-permission mapping and the manifest must explicitly list the same permission under permissions. ICT Mentor is registered in advisory mode for five capabilities and explicitly grants only knowledge.retrieve, user_input.read, and chart_attachment.read; every invocation still requires central authorization.
 
 Malformed manifests and unknown fields are rejected. Disabled agents are discoverable but not dispatchable. Capability declarations do not grant permissions.
 

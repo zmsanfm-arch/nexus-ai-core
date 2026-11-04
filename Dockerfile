@@ -13,6 +13,7 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
 COPY agents ./agents
+COPY docs ./docs
 RUN mkdir -p /app/data && chown -R nexus:nexus /app
 USER nexus
 EXPOSE 8000

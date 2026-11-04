@@ -14,6 +14,7 @@ from app.storage import store
 from app.production_config import validate_production_environment
 from app.services.task_lifecycle import TaskQueueService
 from app.services.knowledge_store import KnowledgeStoreAdapter
+from app.services.research_routes import register_research_routes
 from app.schemas import BacktestRunCreate
 from app.backtesting.engine import Candle, TradeIntent, ExecutionCosts, BacktestConfig, run_backtest
 from app.backtesting.evaluator import evaluate_trades, evaluate_acceptance
@@ -256,3 +257,6 @@ def run_research_backtest(
             "A passing research gate is not trade authorization.",
         ],
     }
+
+# Strategy, experiment and historical market-data routes share central auth and audit.
+register_research_routes(app, store, require_api_access, require_admin)

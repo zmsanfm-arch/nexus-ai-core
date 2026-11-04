@@ -92,8 +92,32 @@ services:
     networks: [backend]
     # Worker has no published ports. Only general advisory tasks are enabled.
 
+
+  proxy:
+    image: caddy:2
+    profiles: ["public"]
+    restart: unless-stopped
+    environment:
+      NEXUS_DOMAIN: ${NEXUS_DOMAIN:?Set NEXUS_DOMAIN after DNS is configured}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+    networks: [backend]
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   backend:
