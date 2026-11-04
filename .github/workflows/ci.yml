@@ -107,8 +107,8 @@ jobs:
         run: |
           set -eu
           docker run -d --name nexus-ai-core-smoke -p 127.0.0.1:8000:8000 nexus-ai-core:ci
-          docker exec nexus-ai-core-smoke python -c "from pathlib import Path; assert Path('/app/docs/strategy-research/schemas/strategy.schema.json').is_file(); assert Path('/app/docs/strategy-research/schemas/experiment-plan.schema.json').is_file()"
           trap 'docker rm -f nexus-ai-core-smoke >/dev/null 2>&1 || true' EXIT
+          docker exec nexus-ai-core-smoke python -c "from pathlib import Path; assert Path('/app/docs/strategy-research/schemas/strategy.schema.json').is_file(); assert Path('/app/docs/strategy-research/schemas/experiment-plan.schema.json').is_file()"
           for attempt in $(seq 1 40); do
             status="$(docker inspect --format='{{.State.Health.Status}}' nexus-ai-core-smoke)"
             if [ "$status" = "healthy" ]; then
