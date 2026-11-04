@@ -40,6 +40,32 @@ services:
     networks: [backend]
     # Keep one API replica until migrations move to a dedicated release job.
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.worker_entrypoint"]
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      NEXUS_WORKER_POLL_SECONDS: ${NEXUS_WORKER_POLL_SECONDS:-2}
+      NEXUS_WORKER_LEASE_SECONDS: ${NEXUS_WORKER_LEASE_SECONDS:-600}
+      NEXUS_WORKER_MAX_ATTEMPTS: ${NEXUS_WORKER_MAX_ATTEMPTS:-3}
+      NEXUS_WORKER_RETRY_DELAY_SECONDS: ${NEXUS_WORKER_RETRY_DELAY_SECONDS:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    # Worker has no published ports. Only general advisory tasks are enabled.
+
 volumes:
   postgres_data:
 
