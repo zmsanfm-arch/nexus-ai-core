@@ -4,13 +4,14 @@
 
 ## Current Railway deployment evidence (2026-11-04)
 
-- Main release commit: `2346dab5b83cebd9da3f8f901d92b9c5f4a409d6`.
-- Railway API deployment: `b388b08b-b8c2-4a8b-bc53-024ed0586270`; state `SUCCESS`, one replica online.
+- Main release commit: `6d3293b1b58be7a5a37f07de27dc6d212b2d3538`.
+- Railway API deployment: `0bec6b64-f828-4615-8dfc-8f1fd9e5ead7`; state `SUCCESS`, one replica online.
 - Railway API service: `nexus-api`; production environment has no public or custom domain attached. DNS/TLS and external firewall verification are operator-owned.
 - The pre-deploy release command is `python scripts/migrate_release.py`. It requires a PostgreSQL `DATABASE_URL`, sets migration flags before importing the application store, runs Alembic explicitly, and performs a database round-trip check.
 - Deployment logs confirm `PostgresqlImpl`, successful upgrades through the current migration chain, application startup, and `GET /ready` returning `200 OK`. API startup uses `NEXUS_SKIP_MIGRATIONS=true` and fails closed unless the database is at the exact migration head.
-- CI run 430 passed on PR #19 candidate SHA `8ac327151818324234ef1287de862e9dc6a7cb42`: Python 3.11 and 3.12 tests, PostgreSQL 16 queue concurrency tests (16 workers / 256 tasks), Docker build and health smoke test, dependency audit, Bandit, and encrypted PostgreSQL backup/restore drill against disposable CI databases.
-- PRs #1–#7 and #9–#19 are merged. PR #8 is closed as superseded. The current production deployment is the merged mainline, not an unmerged draft.
+- CI run 438 passed on PR #23 candidate SHA `bb84faa3179edfb0abd73d077b14600b03d1c560`: Python 3.11 and 3.12 tests, PostgreSQL 16 queue concurrency tests (16 workers / 256 tasks), container build and health smoke test, dependency audit, Bandit, and encrypted PostgreSQL backup/restore drill against disposable CI databases. CI run 437 also passed after upgrading checkout/setup-python actions to Node 24-compatible releases.
+- Authenticated API and administrator principals have separate in-process fixed-window limits: 600 API requests/minute and 300 admin requests/minute by default. `/health` and `/ready` are exempt. Railway is configured with one API replica; this limiter is not shared across replicas.
+- PRs #1–#7 and #9–#23 are merged. PR #8 is closed as superseded. The current production deployment is the merged mainline, not an unmerged draft.
 - Railway recorded earlier failed deployments while the migration release path was being corrected. The latest deployment is successful and has no active warning/critical notifications; historical failures remain visible in Railway's recent-failure window.
 - CI restore evidence is not a production backup schedule, off-host retention, or production-host restore test. Do not claim production RPO/RTO until measured.
 
@@ -147,9 +148,9 @@ No host, domain, DNS record, certificate, or firewall change is performed by thi
 |---|---|---|
 | PR chain / main integration | Merged through PR #19; PR #8 superseded | Keep future changes behind green CI and review |
 | Production deployment | Railway API online; one replica; `/ready` returned 200 against PostgreSQL; no public domain | Operator to configure approved domain/TLS and verify external firewall/exposure; public launch remains NO-GO |
-| Secrets lifecycle | Startup rejects missing, placeholder, weak (<32 characters), or reused API/admin tokens | External secret manager, rotation, revocation, audit |
+| Secrets lifecycle | Startup rejects missing, placeholder, weak (<32 characters), or reused API/admin tokens; rotation script now has mode/no-overwrite/no-leak tests | External secret manager, executed rotation/revocation drill, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
-| Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
+| Rate limiting | Authenticated API/admin per-process limits (600/300 per minute); health/readiness exempt; one API replica | Edge-level invalid-auth throttling and shared limiter before multi-replica scaling |
 | Worker | Standalone generic advisory entrypoint and opt-in supervised Compose service; CI PostgreSQL claim test covers 16 workers / 256 tasks | Provider/privacy approval, queue/dead-letter alerts, idempotency validation, and production capacity benchmark |
 | Migrations | Railway one-shot `scripts/migrate_release.py` succeeded against PostgreSQL; API verifies exact schema head at startup | Complete deployment-level rollback drill and record release evidence |
 | Backups | Encrypted backup/restore script and disposable PostgreSQL CI drill pass | Provision off-host production backups, retention, key custody, and measured production restore/RPO/RTO |
