@@ -30,7 +30,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7 → PR #9 → PR #10 → PR #11 → PR #12 → PR #13. PR #8's unique transport changes are reconciled by PR #13; do not merge PR #8's divergent branch wholesale. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
 2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
-4. Configure TLS reverse proxy with valid certificates, strict host allow-list, request/body size limits, and forwarding headers trusted only from the local proxy.
+4. Configure the opt-in Caddy reverse proxy in `deploy/Caddyfile` after DNS A/AAAA records point to the host. Set `NEXUS_DOMAIN`, open inbound 80/443, validate certificate issuance, and start only the `public` Compose profile. The proxy enforces the configured host, 10 MB request body limit, HTTPS certificate automation, and security headers; API port 8000 remains loopback-only on the host.
 5. Generate independent high-entropy API/admin secrets of at least 32 characters. Store them outside Git; establish rotation and emergency revocation. Do not reuse passwords or leave sample placeholders; production startup rejects these conditions.
 6. Provision PostgreSQL with least-privilege credentials, encrypted storage, restricted network access, automated backups, retention, and a tested restore procedure.
 7. Validate `.env.production` and run Compose config validation without printing secrets into logs or tickets.
@@ -51,6 +51,8 @@ chmod 600 .env.production
 docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
 docker compose --env-file .env.production -f docker-compose.production.yml build
 docker compose --env-file .env.production -f docker-compose.production.yml up -d
+# Only after DNS/firewall/domain validation, expose the Caddy TLS proxy:
+NEXUS_DOMAIN=api.example.com docker compose --env-file .env.production -f docker-compose.production.yml --profile public up -d proxy
 # Only after model-provider approval/configuration, opt in to queued-task processing:
 docker compose --env-file .env.production -f docker-compose.production.yml --profile worker up -d worker
 docker compose --env-file .env.production -f docker-compose.production.yml ps
@@ -129,7 +131,7 @@ No host, domain, DNS record, certificate, or firewall change is performed by thi
 | Area | Status | Required action |
 |---|---|---|
 | PR chain / main integration | Open Draft PRs | Review dependency order; reconcile PR #1 separately |
-| Production deployment | Not deployed | Provision host/TLS/firewall only after explicit release approval |
+| Production deployment | Not deployed; opt-in Caddy TLS proxy configuration prepared | Provision host/DNS/firewall, validate certificate issuance and external exposure only after explicit release approval |
 | Secrets lifecycle | Startup rejects missing, placeholder, weak (<32 characters), or reused API/admin tokens | External secret manager, rotation, revocation, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
