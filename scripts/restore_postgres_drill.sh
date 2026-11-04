@@ -17,14 +17,16 @@ umask 077
 db_path="${NEXUS_RESTORE_DATABASE_URL##*/}"
 db_name="${db_path%%\?*}"
 [[ "$db_name" == nexus_restore_* ]] || { echo "Restore target database name must start with nexus_restore_." >&2; exit 2; }
-command -v age >/dev/null
-command -v pg_restore >/dev/null
 test -r "$BACKUP_FILE"
 test -r "$AGE_IDENTITY_FILE"
+test -r "$BACKUP_FILE.sha256" || {
+  echo "Backup checksum sidecar is required." >&2
+  exit 2
+}
+(cd "$(dirname "$BACKUP_FILE")" && sha256sum --check "$(basename "$BACKUP_FILE").sha256")
 
-if [[ -f "$BACKUP_FILE.sha256" ]]; then
-  (cd "$(dirname "$BACKUP_FILE")" && sha256sum --check "$(basename "$BACKUP_FILE").sha256")
-fi
+command -v age >/dev/null
+command -v pg_restore >/dev/null
 
 age --decrypt --identity "$AGE_IDENTITY_FILE" "$BACKUP_FILE" |
   pg_restore --exit-on-error --clean --if-exists --no-owner --no-acl --dbname="$NEXUS_RESTORE_DATABASE_URL"
