@@ -3,6 +3,9 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from pydantic import ValidationError
+
+from app.services.research_routes import DataPayload, TransitionPayload
 
 from app.services.research_store import ResearchStore
 from app.storage import SQLAlchemyStore
@@ -78,3 +81,10 @@ def test_database_rejects_mutation_and_deletion_of_research_records(tmp_path):
             with core.engine.begin() as connection:
                 connection.execute(text(statement))
     core.close()
+
+
+def test_research_and_transition_payloads_have_explicit_size_limits():
+    with pytest.raises(ValidationError, match="256 KiB"):
+        DataPayload(data={"large": "x" * 262145})
+    with pytest.raises(ValidationError, match="16 KiB"):
+        TransitionPayload(target_state="candidate", evidence={"large": "x" * 17000})
