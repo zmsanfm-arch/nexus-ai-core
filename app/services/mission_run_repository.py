@@ -197,7 +197,7 @@ class MissionRunRepository:
     def finish(self, run_id: str, worker_id: str, status: str,
                error: str | None = None, retry_delay_seconds: int = 30,
                max_attempts: int = 3) -> str:
-        if status not in {"completed", "failed", "blocked", "review_required"}:
+        if status not in {"completed", "failed", "blocked", "review_required", "nodes_succeeded"}:
             raise ValueError("Invalid terminal mission status.")
         now = datetime.now(timezone.utc)
         with self.storage.sessions.begin() as session:
@@ -205,6 +205,7 @@ class MissionRunRepository:
                 MissionQueueRecord.run_id == run_id,
                 MissionQueueRecord.status == "leased",
                 MissionQueueRecord.lease_owner == worker_id,
+                MissionQueueRecord.lease_expires_at > now,
             ).with_for_update())
             if queue is None:
                 raise ValueError("Mission lease is not owned by this worker.")
