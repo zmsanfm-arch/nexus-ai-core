@@ -67,6 +67,8 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 The repository provides `scripts/backup_postgres_encrypted.sh`. Install PostgreSQL client tools and age on the trusted host, provide `DATABASE_URL`, and set `AGE_RECIPIENT` to the public age recipient. The script writes a mode-0600 encrypted custom-format dump and SHA-256 sidecar into a mode-0700 directory. Store copies off-host in an access-controlled location with provider-side encryption and retention. Do not store the age identity/private key beside the backups.
 
+The CI pipeline also performs an end-to-end drill against a disposable PostgreSQL service: it creates an age-encrypted dump, verifies the checksum, restores into an isolated `nexus_restore_*` database, and checks a known restored row. This validates the scripts in ephemeral CI; it does not replace a production-host restore drill, off-host retention, or measured RPO/RTO.
+
 Example (run on the host; values are not to be pasted into chat or shell history):
 
 ```bash
