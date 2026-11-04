@@ -1,4 +1,10 @@
+import os
 from logging.config import fileConfig
+
+# Importing app.storage creates the module-level application store. Disable its
+# automatic migration side effect while Alembic imports model metadata; the
+# explicit migration command owns the connection and migration transaction.
+os.environ["NEXUS_MIGRATION_COMMAND"] = "true"
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
@@ -30,7 +36,7 @@ def do_run_migrations(connection):
     # Serialize concurrent PostgreSQL migration jobs across app instances.
     # The transaction-scoped lock is released automatically on commit/rollback.
     if connection.dialect.name == "postgresql":
-        connection.execute(text("SELECT pg_advisory_xact_lock(731946205118)") )
+        connection.execute(text("SELECT pg_advisory_xact_lock(731946205118)"))
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
