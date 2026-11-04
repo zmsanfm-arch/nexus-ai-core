@@ -67,9 +67,21 @@ class SQLAlchemyStore:
     def _run_migrations(self):
         from alembic import command
         from alembic.config import Config
+        from alembic.migration import MigrationContext
+        from alembic.script import ScriptDirectory
 
         config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
         config.set_main_option("sqlalchemy.url", self.engine.url.render_as_string(hide_password=False).replace("%", "%%"))
+        if os.getenv("NEXUS_SKIP_MIGRATIONS", "").strip().lower() in {"1", "true", "yes"}:
+            try:
+                with self.engine.connect() as connection:
+                    current = MigrationContext.configure(connection).get_current_revision()
+                expected = ScriptDirectory.from_config(config).get_current_head()
+            except Exception as exc:
+                raise RuntimeError("Database migration verification failed; run the dedicated migration release job.") from exc
+            if not expected or current != expected:
+                raise RuntimeError("Database schema is not at the application migration head; run the dedicated migration release job.")
+            return
         with self.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
