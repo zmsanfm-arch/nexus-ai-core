@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from app.storage import Base
 from app.services.knowledge_store import metadata as knowledge_metadata
@@ -27,6 +27,10 @@ def run_migrations_offline():
 
 
 def do_run_migrations(connection):
+    # Serialize concurrent PostgreSQL migration jobs across app instances.
+    # The transaction-scoped lock is released automatically on commit/rollback.
+    if connection.dialect.name == "postgresql":
+        connection.execute(text("SELECT pg_advisory_xact_lock(731946205118)") )
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

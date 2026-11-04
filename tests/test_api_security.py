@@ -137,3 +137,26 @@ def test_queued_task_is_owned_by_configured_api_principal(monkeypatch):
         headers={"Authorization": "Bearer queue-api-token"},
     )
     assert other_read.status_code == 404
+
+
+def test_queue_status_requires_admin_auth(client):
+    response = client.get("/admin/queue")
+    assert response.status_code == 401
+
+
+def test_queue_status_returns_aggregate_counts_only(client, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(
+        main.store,
+        "queue_summary",
+        lambda: {"queued": 2, "leased": 1, "completed": 4, "dead": 1, "total": 8},
+    )
+    response = client.get(
+        "/admin/queue",
+        headers={"Authorization": "Bearer test-secret-token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "queue": {"queued": 2, "leased": 1, "completed": 4, "dead": 1, "total": 8}
+    }
