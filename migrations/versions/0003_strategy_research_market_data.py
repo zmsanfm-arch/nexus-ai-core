@@ -1,12 +1,12 @@
 """Add immutable strategy research and historical market datasets.
 
-Revision ID: 0003_strategy_research_market_data
+Revision ID: 0003_research_market_data
 Revises: 0002_knowledge_terms
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0003_strategy_research_market_data"
+revision = "0003_research_market_data"
 down_revision = "0002_knowledge_terms"
 branch_labels = None
 depends_on = None
