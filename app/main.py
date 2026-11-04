@@ -199,7 +199,7 @@ def create_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": False,
+        "execution_available": True,
     }
 
 
