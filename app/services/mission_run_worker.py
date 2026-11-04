@@ -41,6 +41,10 @@ class MissionRunWorker:
         if claim is None:
             return False
         run_id = claim["run_id"]
+        if claim["attempts"] > self.max_queue_attempts:
+            self.repository.finish(run_id, self.worker_id, "failed",
+                                   "mission_queue_attempt_limit_reached", max_attempts=1)
+            return True
         run = self.repository.get_for_worker(run_id)
         if run is None:
             self.repository.finish(run_id, self.worker_id, "failed",
@@ -66,6 +70,10 @@ class MissionRunWorker:
                         resumed_nodes=len(outputs), queue_attempt=claim["attempts"])
 
             for planned in plan.ordered_nodes:
+                if not self.repository.renew_lease(
+                    run_id, self.worker_id, self.lease_seconds
+                ):
+                    raise RuntimeError("mission_lease_lost")
                 state = node_states[planned.node_id]
                 if state["status"] == "completed":
                     continue
