@@ -92,6 +92,30 @@ class SQLAlchemyStore:
             record = session.get(ApprovalRecord, approval_id)
             return dict(record.data) if record else None
 
+    def create_approval_with_audit(self, approval: dict, event: dict):
+        with self._lock, self.sessions.begin() as session:
+            session.add(ApprovalRecord(id=approval["id"], data=dict(approval)))
+            session.add(AuditRecord(data=dict(event), recorded_at=datetime.now(timezone.utc)))
+
+    def decide_approval_with_audit(self, approval_id: str, approved: bool, reviewer: str):
+        with self._lock, self.sessions.begin() as session:
+            record = session.scalar(
+                select(ApprovalRecord).where(ApprovalRecord.id == approval_id).with_for_update()
+            )
+            if record is None:
+                raise KeyError(approval_id)
+            item = dict(record.data)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            record.data = item
+            session.add(AuditRecord(data={
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+            }, recorded_at=datetime.now(timezone.utc)))
+            return item
+
     def append_audit(self, event: dict):
         with self._lock, self.sessions.begin() as session:
             session.add(AuditRecord(
@@ -217,6 +241,31 @@ class InMemoryStore:
         with self._lock:
             item = self.approvals.get(approval_id)
             return dict(item) if item else None
+
+    def create_approval_with_audit(self, approval, event):
+        with self._lock:
+            if approval["id"] in self.approvals:
+                raise ValueError("Approval already exists")
+            self.approvals[approval["id"]] = dict(approval)
+            self.audit.append({**event, "recorded_at": datetime.now(timezone.utc).isoformat()})
+
+    def decide_approval_with_audit(self, approval_id, approved, reviewer):
+        with self._lock:
+            item = self.approvals.get(approval_id)
+            if item is None:
+                raise KeyError(approval_id)
+            if item.get("status") != "pending":
+                raise ValueError("Approval is already resolved")
+            item = dict(item)
+            item["status"] = "approved" if approved else "rejected"
+            item["reviewer"] = reviewer
+            self.approvals[approval_id] = item
+            self.audit.append({
+                "event": "approval_decided", "approval_id": approval_id,
+                "decision": item["status"], "reviewer": reviewer,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            })
+            return item
 
 
     def enqueue_task(self, task):
