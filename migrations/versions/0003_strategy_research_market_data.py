@@ -60,8 +60,8 @@ def upgrade():
     elif op.get_bind().dialect.name == "postgresql":
         op.execute(
             "CREATE OR REPLACE FUNCTION nexus_reject_immutable_mutation() "
-            "RETURNS trigger LANGUAGE plpgsql AS $ "
-            "BEGIN RAISE EXCEPTION 'NEXUS research records are immutable'; END; $"
+            "RETURNS trigger LANGUAGE plpgsql AS '"
+            "BEGIN RAISE EXCEPTION ''NEXUS research records are immutable''; END;'"
         )
         for table in immutable_tables:
             op.execute(
