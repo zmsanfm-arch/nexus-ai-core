@@ -6,9 +6,9 @@
 
 - FastAPI API, bearer-token authentication, administrator-only approval/audit routes, SQLAlchemy persistence, Alembic migrations, and PostgreSQL 16 CI coverage exist on the integration branch.
 - ICT Mentor is advisory-only. Broker/MT5 connectivity, account/position access, order execution, and live trading must remain disabled.
-- Durable queue storage/lease primitives exist; a continuously supervised worker and production task handler do not.
+- Durable queue storage/lease primitives and a tested injectable `TaskWorker` lifecycle (claim, lease, bounded retries, dead-letter, audit) exist; however, no standalone worker entrypoint, approved production task handler, or supervised worker service is provided.
 - Authentication is a single configured API principal/admin token model, not OIDC or multi-user identity.
-- Knowledge retrieval is lexical and currently scans stored chunks; semantic retrieval and indexed retrieval are not implemented.
+- Knowledge retrieval is indexed lexical with Persian/Arabic Unicode normalization; semantic/vector retrieval and external crawling are not implemented.
 - `/health` is process liveness only. It does not prove database readiness, provider reachability, or worker health.
 - Alembic migrations currently run during store initialization. Run exactly one API instance. Do not scale horizontally until migrations move to a dedicated release step with startup coordination.
 - Research backtests are not broker-grade and do not authorize trading.
@@ -26,7 +26,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 
 ## Preflight — required before public exposure
 
-1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
+1. Review and merge code changes in dependency order only after review and green CI: PR #2 → PR #3 → PR #4 → PR #5 → PR #6 → PR #7. PR #1 is separate; do not merge wholesale. Reconcile its unique changes deliberately.
 2. Confirm required CI checks on the exact merge candidate SHA. Run full tests and container build after assembling the final candidate.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure TLS reverse proxy with valid certificates, strict host allow-list, request/body size limits, and forwarding headers trusted only from the local proxy.
@@ -68,6 +68,8 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 
 **NO-GO until all are true:** reviewed/merged PR chain; exact-SHA CI green; independent security review complete; TLS/firewall verified; secrets stored and rotation tested; PostgreSQL backups/restores tested; migration procedure controlled; monitoring/alerts active; auth/rate limits validated; incident and rollback drills completed.
 
+**Queued-task NO-GO:** `POST /tasks/queued` must not be treated as operational until a standalone worker entrypoint, approved task handler, supervised service, and queue failure/dead-letter monitoring are provided. The synchronous `POST /tasks` path remains the available execution path.
+
 **Additional NO-GO for scale-out:** dedicated migration job/lock, OIDC or equivalent multi-user identity, distributed rate limiting, supervised worker service, queue idempotency/dead-letter operations, and load/concurrency testing.
 
 **Trading remains disabled.** This runbook does not enable live trading or broker connectivity.
@@ -81,11 +83,11 @@ Do not paste secrets into shell history, chat, GitHub issues, or logs. The sampl
 | Secrets lifecycle | Basic env configuration | Secret manager, rotation, revocation, audit |
 | Identity | Single API/admin token | OIDC, multi-user principals, scoped credentials |
 | Rate limiting | No distributed limiter | Per-principal/IP limits and abuse protection |
-| Worker | Queue primitives only | Supervised worker, handler, idempotency, dead-letter runbook |
+| Worker | Queue/lease primitives and injectable `TaskWorker` lifecycle tests | Standalone entrypoint, approved handler, supervised service, idempotency and dead-letter monitoring |
 | Migrations | Alembic at startup | Dedicated migration job/lock before multi-instance use |
 | Backups | Not provisioned | Automated encrypted backups and restore drills |
 | Observability | Basic health endpoint | DB readiness, metrics, traces, alerts, redacted logs |
-| Knowledge search | Linear lexical scan | Indexed lexical retrieval, then optional semantic backend |
+| Knowledge search | Indexed lexical retrieval with Unicode normalization | Optional semantic backend if justified by corpus size/use case |
 | Market/research data | No durable datasets/results | Versioned dataset and experiment persistence |
 | Security assurance | CI only | Independent review, threat model, dependency/container scans |
 | Trading | Disabled | Keep disabled; no broker/account/order connectivity |
