@@ -50,7 +50,7 @@ class TaskQueueRecord(Base):
 
 class SQLAlchemyStore:
     """Durable SQL store; SQLite by default, PostgreSQL via DATABASE_URL."""
-    def __init__(self, database_url: str | None = None):
+    def __init__(self, database_url: str | None = None, run_migrations: bool = True):
         url = database_url or os.getenv("DATABASE_URL", "sqlite:///./data/nexus.db")
         if url.startswith("sqlite:///"):
             db_path = url.removeprefix("sqlite:///")
@@ -62,7 +62,8 @@ class SQLAlchemyStore:
         self.engine = create_engine(url, **options)
         self.sessions = sessionmaker(bind=self.engine, expire_on_commit=False)
         self._lock = RLock()
-        self._run_migrations()
+        if run_migrations:
+            self._run_migrations()
 
     def _run_migrations(self):
         from alembic import command
@@ -395,4 +396,4 @@ class InMemoryStore:
 
 
 # Application default: durable SQL storage. InMemoryStore remains test-only.
-store = SQLAlchemyStore()
+store = SQLAlchemyStore(run_migrations=os.getenv("NEXUS_MIGRATION_COMMAND", "").strip().lower() not in {"1", "true", "yes"})
