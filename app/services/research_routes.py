@@ -1,5 +1,6 @@
 """Central API routes for immutable strategy research and historical market data."""
 import hashlib
+import json
 import tempfile
 import uuid
 from dataclasses import asdict
@@ -9,7 +10,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from jsonschema import Draft202012Validator, FormatChecker
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.market_data.csv_loader import load_ohlc_csv
 from app.services.research_store import ResearchStore
@@ -23,6 +24,17 @@ class StrictPayload(BaseModel):
 class DataPayload(StrictPayload):
     data: dict[str, Any] = Field(min_length=1)
 
+    @field_validator("data")
+    @classmethod
+    def data_must_be_bounded_json(cls, value):
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Research data must contain finite JSON-compatible values") from exc
+        if len(encoded.encode("utf-8")) > 262144:
+            raise ValueError("Research data exceeds the 256 KiB limit")
+        return value
+
 
 class TransitionPayload(StrictPayload):
     target_state: Literal[
@@ -30,6 +42,17 @@ class TransitionPayload(StrictPayload):
         "demo_active", "suspended", "retired",
     ]
     evidence: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("evidence")
+    @classmethod
+    def evidence_must_be_bounded_json(cls, value):
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Transition evidence must contain finite JSON-compatible values") from exc
+        if len(encoded.encode("utf-8")) > 16384:
+            raise ValueError("Transition evidence exceeds the 16 KiB limit")
+        return value
 
 
 def _validate_contract(schema_name: str, payload: dict) -> None:
