@@ -256,63 +256,79 @@ class PlaywrightDockerRunner:
             match = re.search(r"https://[A-Za-z0-9.-]+(?::443)?(?:/[^\\s]*)?", request.request)
             target = match.group(0).rstrip(".,;)]}") if match else None
         allowed = self._validate_target(target, sorted(self.allowed_domains))
-        proxy_domains = self._verify_network()
-        if not allowed.issubset(proxy_domains):
-            raise WebRuntimeError("mission domain allowlist exceeds the egress proxy allowlist")
-        self._docker(["image", "inspect", self.image])
-        payload = {
-            "target_url": target,
-            "allowed_domains": sorted(allowed),
-            "proxy": self.proxy_url,
-            "timeout_seconds": self.timeout_seconds,
-        }
-        command = [
-            self.docker_binary, "run", "--rm",
-            "--network", self.network,
-            "--read-only",
-            "--cap-drop", "ALL",
-            "--security-opt", "no-new-privileges:true",
-            "--pids-limit", "128",
-            "--memory", self.memory,
-            "--cpus", self.cpus,
-            "--shm-size", "256m",
-            "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
-            "--user", "1000:1000",
-            "--env", "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
-            "--env", "HOME=/tmp",
-            "--entrypoint", "python",
-            self.image, "-c", _BROWSER_SCRIPT,
-        ]
-        binary = shutil.which(self.docker_binary)
-        if not binary:
-            raise WebRuntimeError("Docker CLI is unavailable")
+        network_name = f"{self.network}-{uuid4().hex[:12]}"
+        self._docker(["network", "create", "--internal", network_name])
+        connected = False
         try:
-            result = subprocess.run(
-                [binary, *command[1:]],
-                input=json.dumps(payload, separators=(",", ":")),
-                capture_output=True, text=True, timeout=self.timeout_seconds + 30,
-                check=False, env={"PATH": os.path.dirname(binary)},
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise WebRuntimeError("isolated browser execution timed out") from exc
-        if result.returncode:
-            raise WebRuntimeError("isolated browser execution failed")
-        try:
-            output = json.loads(result.stdout)
-            report = output["report"]
-            raw_shots = output["screenshots"]
-            if not isinstance(report, dict) or not isinstance(raw_shots, list):
-                raise ValueError("invalid output")
-            shots = []
-            for shot in raw_shots[:5]:
-                content = base64.b64decode(shot["content"], validate=True)
-                shots.append({
-                    "name": shot["name"], "media_type": shot["media_type"],
-                    "content": content, "viewport": shot.get("viewport"),
-                })
-            return {"report": report, "screenshots": shots}
-        except (KeyError, TypeError, ValueError) as exc:
-            raise WebRuntimeError("isolated browser returned an invalid result") from exc
+            self._docker(["network", "connect", network_name, self.proxy_container])
+            connected = True
+            proxy_domains = self._verify_network(network_name)
+            if not allowed.issubset(proxy_domains):
+                raise WebRuntimeError("mission domain allowlist exceeds the egress proxy allowlist")
+            self._docker(["image", "inspect", self.image])
+            payload = {
+                "target_url": target,
+                "allowed_domains": sorted(allowed),
+                "proxy": self.proxy_url,
+                "timeout_seconds": self.timeout_seconds,
+            }
+            command = [
+                self.docker_binary, "run", "--rm",
+                "--network", network_name,
+                "--read-only",
+                "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges:true",
+                "--pids-limit", "128",
+                "--memory", self.memory,
+                "--cpus", self.cpus,
+                "--shm-size", "256m",
+                "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
+                "--user", "1000:1000",
+                "--env", "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+                "--env", "HOME=/tmp",
+                "--entrypoint", "python",
+                self.image, "-c", _BROWSER_SCRIPT,
+            ]
+            binary = shutil.which(self.docker_binary)
+            if not binary:
+                raise WebRuntimeError("Docker CLI is unavailable")
+            try:
+                result = subprocess.run(
+                    [binary, *command[1:]],
+                    input=json.dumps(payload, separators=(",", ":")),
+                    capture_output=True, text=True, timeout=self.timeout_seconds + 30,
+                    check=False, env={"PATH": os.path.dirname(binary)},
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise WebRuntimeError("isolated browser execution timed out") from exc
+            if result.returncode:
+                raise WebRuntimeError("isolated browser execution failed")
+            try:
+                output = json.loads(result.stdout)
+                report = output["report"]
+                raw_shots = output["screenshots"]
+                if not isinstance(report, dict) or not isinstance(raw_shots, list):
+                    raise ValueError("invalid output")
+                shots = []
+                for shot in raw_shots[:5]:
+                    screenshot_content = base64.b64decode(shot["content"], validate=True)
+                    shots.append({
+                        "name": shot["name"], "media_type": shot["media_type"],
+                        "content": screenshot_content, "viewport": shot.get("viewport"),
+                    })
+                return {"report": report, "screenshots": shots}
+            except (KeyError, TypeError, ValueError) as exc:
+                raise WebRuntimeError("isolated browser returned an invalid result") from exc
+        finally:
+            if connected:
+                try:
+                    self._docker(["network", "disconnect", self.proxy_container, network_name])
+                except WebRuntimeError:
+                    pass
+            try:
+                self._docker(["network", "rm", network_name])
+            except WebRuntimeError:
+                pass
 
 
 def playwright_runner_from_env():
