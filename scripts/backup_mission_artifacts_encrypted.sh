@@ -12,7 +12,20 @@ if [[ ! -d "$root" || -L "$root" ]]; then
 fi
 root="$(realpath -e "$root")"
 mkdir -p "$BACKUP_DIR"
+if [[ -L "$BACKUP_DIR" ]]; then
+  echo "Backup directory must not be a symlink." >&2
+  exit 2
+fi
+BACKUP_DIR="$(realpath -e "$BACKUP_DIR")"
+case "$BACKUP_DIR/" in
+  "$root/"*)
+    echo "Encrypted backups must be stored outside the artifact root." >&2
+    exit 2
+    ;;
+esac
 chmod 700 "$BACKUP_DIR"
+command -v age >/dev/null || { echo "age is required." >&2; exit 2; }
+command -v tar >/dev/null || { echo "tar is required." >&2; exit 2; }
 
 if find "$root" -type l -print -quit | grep -q .; then
   echo "Artifact root contains a symlink; refusing backup." >&2
