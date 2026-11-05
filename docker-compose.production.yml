@@ -80,6 +80,9 @@ services:
       NEXUS_WORKER_LEASE_SECONDS: ${NEXUS_WORKER_LEASE_SECONDS:-600}
       NEXUS_WORKER_MAX_ATTEMPTS: ${NEXUS_WORKER_MAX_ATTEMPTS:-3}
       NEXUS_WORKER_RETRY_DELAY_SECONDS: ${NEXUS_WORKER_RETRY_DELAY_SECONDS:-30}
+      NEXUS_BROWSER_DOCKER_CERT_PATH: /run/browser-docker-certs
+    volumes:
+      - ${NEXUS_BROWSER_DOCKER_CERTS_PATH:-./secrets/browser-docker}:/run/browser-docker-certs:ro
     depends_on:
       api:
         condition: service_healthy
