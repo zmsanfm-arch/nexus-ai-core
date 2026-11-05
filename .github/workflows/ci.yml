@@ -132,6 +132,41 @@ jobs:
           done
           docker logs nexus-ai-core-smoke
           exit 1
+      - name: Build and exercise isolated Playwright and egress proxy containers
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          docker pull python:3.12-slim
+          base_image="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' python:3.12-slim | grep -m1 '@sha256:')"
+          test -n "$base_image"
+          docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.browser-egress -t nexus-browser-egress:ci .
+          docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.playwright-runner -t nexus-playwright-runner:ci .
+          docker network create --internal nexus-browser-internal
+          docker network create nexus-browser-egress
+          docker run -d --name nexus-egress-proxy --network nexus-browser-egress \
+            -e NEXUS_EGRESS_PROXY_MODE=allowlist-v1 \
+            -e NEXUS_EGRESS_ALLOWED_DOMAINS=example.com \
+            nexus-browser-egress:ci
+          docker network connect nexus-browser-internal nexus-egress-proxy
+          cleanup() {
+            docker rm -f nexus-egress-proxy >/dev/null 2>&1 || true
+            docker network rm nexus-browser-internal nexus-browser-egress >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if docker logs nexus-egress-proxy 2>&1 | grep -q "egress proxy ready"; then
+              break
+            fi
+            sleep 1
+          done
+          docker logs nexus-egress-proxy 2>&1 | grep -q "egress proxy ready"
+          browser_image="$(docker image inspect --format '{{.Id}}' nexus-playwright-runner:ci)"
+          NEXUS_TEST_PLAYWRIGHT_IMAGE="$browser_image" \
+          NEXUS_TEST_BROWSER_NETWORK=nexus-browser-internal \
+          NEXUS_TEST_BROWSER_PROXY_URL=http://nexus-egress-proxy:3128 \
+          NEXUS_TEST_BROWSER_PROXY_CONTAINER=nexus-egress-proxy \
+            pytest -q tests/test_playwright_docker_runner.py::test_real_playwright_container_uses_egress_gateway
 
   security:
     runs-on: ubuntu-latest
