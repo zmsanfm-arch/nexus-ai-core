@@ -11,6 +11,8 @@ CAPABILITY_PERMISSIONS = {
     "ict.chart_analysis": "chart_attachment.read",
     "ict.strategy_formalization": "user_input.read",
     "ict.trade_review": "user_input.read",
+    "web.browser.test": "browser.execute",
+    "web.build.execute": "sandbox.build",
 }
 
 CORE_ALLOWED_PERMISSIONS = frozenset(CAPABILITY_PERMISSIONS.values())
