@@ -11,4 +11,5 @@ LABEL com.nexus.component="browser-egress-proxy" com.nexus.egress-policy="allowl
 COPY app/services/browser_egress_proxy.py /opt/nexus/browser_egress_proxy.py
 USER 65532:65532
 EXPOSE 3128
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 CMD python -c "import socket; s=socket.create_connection(('127.0.0.1',3128),2); s.close()"
 ENTRYPOINT ["python", "/opt/nexus/browser_egress_proxy.py"]
