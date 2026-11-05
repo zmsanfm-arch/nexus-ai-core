@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from uuid import uuid4
 from urllib.parse import urlsplit
@@ -303,6 +304,7 @@ class PlaywrightDockerRunner:
         container_name = f"nexus-browser-{run_id}"
         self._docker(["network", "create", "--internal", network_name])
         connected = False
+        container_started = False
         try:
             self._docker(["network", "connect", network_name, self.proxy_container])
             connected = True
@@ -337,6 +339,7 @@ class PlaywrightDockerRunner:
             binary = shutil.which(self.docker_binary)
             if not binary:
                 raise WebRuntimeError("Docker CLI is unavailable")
+            container_started = True
             try:
                 result = subprocess.run(
                     [binary, *command[1:]],
@@ -365,19 +368,24 @@ class PlaywrightDockerRunner:
             except (KeyError, TypeError, ValueError) as exc:
                 raise WebRuntimeError("isolated browser returned an invalid result") from exc
         finally:
-            try:
-                self._docker(["rm", "-f", container_name])
-            except WebRuntimeError:
-                pass
+            active_error = sys.exc_info()[0] is not None
+            cleanup_errors = []
+            if container_started:
+                try:
+                    self._docker(["rm", "-f", container_name])
+                except WebRuntimeError as exc:
+                    cleanup_errors.append(exc)
             if connected:
                 try:
                     self._docker(["network", "disconnect", self.proxy_container, network_name])
-                except WebRuntimeError:
-                    pass
+                except WebRuntimeError as exc:
+                    cleanup_errors.append(exc)
             try:
                 self._docker(["network", "rm", network_name])
-            except WebRuntimeError:
-                pass
+            except WebRuntimeError as exc:
+                cleanup_errors.append(exc)
+            if cleanup_errors and not active_error:
+                raise WebRuntimeError("browser container/network cleanup failed") from cleanup_errors[0]
 
 
 def playwright_runner_from_env():
