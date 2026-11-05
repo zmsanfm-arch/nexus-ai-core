@@ -11,6 +11,10 @@ if [[ ! -d "$root" || -L "$root" ]]; then
   exit 2
 fi
 root="$(realpath -e "$root")"
+if [[ "$root" == "/" ]]; then
+  echo "Refusing to back up the filesystem root." >&2
+  exit 2
+fi
 mkdir -p "$BACKUP_DIR"
 if [[ -L "$BACKUP_DIR" ]]; then
   echo "Backup directory must not be a symlink." >&2
