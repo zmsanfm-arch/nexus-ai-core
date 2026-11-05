@@ -55,21 +55,23 @@ def test_playwright_runner_verifies_internal_proxy_only_network(monkeypatch):
     runner = make_runner()
     responses = iter([
         "true",
-        json.dumps({"nexus-browser-internal": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        "true",
         "false",
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
         json.dumps(["NEXUS_EGRESS_PROXY_MODE=allowlist-v1", "NEXUS_EGRESS_ALLOWED_DOMAINS=example.com,example.net"]),
         json.dumps({"com.nexus.component": "browser-egress-proxy", "com.nexus.egress-policy": "allowlist-v1"}),
     ])
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: next(responses))
-    runner._verify_network()
+    runner._verify_network("nexus-browser-internal-abc")
 
 
 def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypatch):
     runner = make_runner()
     responses = iter([
         "true",
-        json.dumps({"nexus-browser-internal": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        "true",
         "false",
         json.dumps({
             "proxy-id": {"Name": "nexus-egress-proxy"},
@@ -78,13 +80,14 @@ def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypat
     ])
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: next(responses))
     with pytest.raises(WebRuntimeError, match="only the approved egress proxy"):
-        runner._verify_network()
+        runner._verify_network("nexus-browser-internal-abc")
 
 
 def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypatch):
     runner = make_runner()
     monkeypatch.setattr(runner, "_verify_network", lambda: {"example.com"})
-    monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: "")
+    docker_calls = []
+    monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: docker_calls.append(args) or "")
     monkeypatch.setattr("app.services.playwright_docker_runner.shutil.which", lambda _: "/usr/bin/docker")
     screenshot = base64.b64encode(b"png-data").decode()
     output = json.dumps({
@@ -109,7 +112,10 @@ def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypat
     command, kwargs = calls[0]
     assert result["report"]["status"] == "completed"
     assert result["screenshots"][0]["content"] == b"png-data"
-    assert "--network" in command and "nexus-browser-internal" in command
+    assert "--network" in command and any(x.startswith("nexus-browser-internal-") for x in command)
+    assert any(call[:3] == ["network", "create", "--internal"] for call in docker_calls)
+    assert any(call[:2] == ["network", "disconnect"] for call in docker_calls)
+    assert any(call[:2] == ["network", "rm"] for call in docker_calls)
     assert "--read-only" in command
     assert "--cap-drop" in command and "ALL" in command
     assert "--security-opt" in command and "no-new-privileges:true" in command
