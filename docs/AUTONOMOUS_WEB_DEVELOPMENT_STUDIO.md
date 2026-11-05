@@ -93,11 +93,13 @@ No connector, browser, CMS, analytics account, production environment or externa
 
 ## 7. Runtime gaps to close before activation
 
+The 21 Web Studio roles now have individual validated YAML manifests under `agents/`. All are deliberately `disabled`, advisory-only, and have empty permission grants. This makes the department discoverable without making any role executable. Registry discovery is not a grant of authority.
+
 The current durable mission worker is sequential and advisory-only. It does not yet provide a website build sandbox, browser automation, artifact storage, visual comparison, general-purpose tool adapters, or this department's agent handlers and central capability mappings.
 
 Required platform increments:
 
-1. Add department/agent manifest contracts with ownership, versioning, status, capabilities, permissions and handler binding.
+1. Add department ownership metadata, manifest-to-handler binding and explicit lifecycle management; the initial disabled role manifests are now present.
 2. Add central permission mappings for each approved web capability; do not widen the global allowlist implicitly.
 3. Add artifact records with immutable IDs, hashes, size limits, retention and principal/mission scoping.
 4. Add isolated build and Playwright execution adapters with strict network egress policy and resource ceilings.
@@ -124,4 +126,4 @@ Until these increments pass CI and security review, web-studio roles remain arch
 
 ## 9. Current implementation status
 
-This document is a design baseline only. The department is not yet registered as executable, and none of the proposed web agents is enabled. PR #32 supplies a durable mission queue foundation but currently wires only the ICT Mentor handler. The Web Studio must be delivered in incremental, reviewable PRs on top of that foundation; no merge or deployment is performed by this specification.
+This document is an architecture baseline with 21 disabled role manifests. The department is discoverable in the registry but is not executable, and none of the proposed web agents is enabled. PR #32 supplies a durable mission queue foundation but currently wires only the ICT Mentor handler. The Web Studio must be delivered in incremental, reviewable PRs on top of that foundation; no merge or deployment is performed by this specification.
