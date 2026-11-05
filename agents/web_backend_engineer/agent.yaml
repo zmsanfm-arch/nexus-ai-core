@@ -1,0 +1,9 @@
+agent_id: web_backend_engineer
+name: Web Backend Engineer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.backend.build
+permissions: []
+requested_permissions: []
