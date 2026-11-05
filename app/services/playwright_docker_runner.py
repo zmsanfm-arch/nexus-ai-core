@@ -111,7 +111,7 @@ class PlaywrightDockerRunner:
 
     def __init__(
         self, *, image: str, network: str, proxy_url: str,
-        proxy_container: str, docker_binary: str = "docker",
+        proxy_container: str, allowed_domains: set[str] | list[str], docker_binary: str = "docker",
         timeout_seconds: int = 90, memory: str = "1g", cpus: str = "2",
     ):
         if not (re.fullmatch(r".+@sha256:[a-f0-9]{64}", image) or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
@@ -127,6 +127,19 @@ class PlaywrightDockerRunner:
             raise ValueError("browser timeout outside permitted range")
         if not re.fullmatch(r"[0-9]+(?:m|g)", memory) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cpus):
             raise ValueError("invalid browser resource limits")
+        normalized_domains = {str(x).lower().rstrip(".") for x in allowed_domains}
+        if not normalized_domains or any(
+            not re.fullmatch(r"[a-z0-9.-]{1,253}", domain) or ".." in domain
+            for domain in normalized_domains
+        ):
+            raise ValueError("browser domain allowlist is invalid")
+        for domain in normalized_domains:
+            try:
+                ipaddress.ip_address(domain)
+            except ValueError:
+                continue
+            raise ValueError("browser allowlist must contain DNS names, not IP literals")
+        self.allowed_domains = frozenset(normalized_domains)
         self.image, self.network, self.proxy_url = image, network, proxy_url
         self.proxy_container, self.docker_binary = proxy_container, docker_binary
         self.timeout_seconds, self.memory, self.cpus = timeout_seconds, memory, cpus
@@ -231,13 +244,11 @@ class PlaywrightDockerRunner:
 
     def __call__(self, request):
         context = request.context or {}
-        policy = context.get("browser_policy")
-        if not isinstance(policy, dict):
-            raise WebRuntimeError("trusted browser policy is required")
         target = context.get("browser_target_url")
-        allowed = self._validate_target(target, policy.get("allowed_domains"))
-        if policy.get("egress_proxy_id") != self.proxy_container:
-            raise WebRuntimeError("browser egress proxy identity does not match central policy")
+        if not target:
+            match = re.search(r"https://[A-Za-z0-9.-]+(?::443)?(?:/[^\\s]*)?", request.request)
+            target = match.group(0).rstrip(".,;)]}") if match else None
+        allowed = self._validate_target(target, sorted(self.allowed_domains))
         proxy_domains = self._verify_network()
         if not allowed.issubset(proxy_domains):
             raise WebRuntimeError("mission domain allowlist exceeds the egress proxy allowlist")
@@ -303,10 +314,15 @@ def playwright_runner_from_env():
     network = os.getenv("NEXUS_BROWSER_INTERNAL_NETWORK", "").strip()
     proxy = os.getenv("NEXUS_BROWSER_EGRESS_PROXY_URL", "").strip()
     proxy_container = os.getenv("NEXUS_BROWSER_EGRESS_PROXY_CONTAINER", "").strip()
-    if not all((image, network, proxy, proxy_container)):
+    allowed_domains = {
+        item.strip().lower().rstrip(".")
+        for item in os.getenv("NEXUS_BROWSER_ALLOWED_DOMAINS", "").split(",")
+        if item.strip()
+    }
+    if not all((image, network, proxy, proxy_container, allowed_domains)):
         return None
     return PlaywrightDockerRunner(
         image=image, network=network, proxy_url=proxy,
-        proxy_container=proxy_container,
+        proxy_container=proxy_container, allowed_domains=allowed_domains,
         timeout_seconds=int(os.getenv("NEXUS_BROWSER_TIMEOUT_SECONDS", "90")),
     )
