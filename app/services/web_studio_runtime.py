@@ -101,7 +101,7 @@ class OfflineDockerBuild:
                 "--tag", tag, "--file", "Dockerfile", "-",
             ]
             try:
-                result = subprocess.run(command, input=archive.read_bytes(), capture_output=True, text=True,
+                result = subprocess.run(command, input=archive.read_bytes(), capture_output=True, text=False,
                                          timeout=self.timeout_seconds, check=False,
                                          env={"PATH": os.path.dirname(docker), "DOCKER_BUILDKIT": "1"})
             except subprocess.TimeoutExpired as exc:
@@ -113,8 +113,8 @@ class OfflineDockerBuild:
                 "context_size_bytes": context_size,
                 "network": "disabled",
                 "pull": "disabled",
-                "stdout": result.stdout[-12000:],
-                "stderr": result.stderr[-12000:],
+                "stdout": (result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else result.stdout)[-12000:],
+                "stderr": (result.stderr.decode("utf-8", errors="replace") if isinstance(result.stderr, bytes) else result.stderr)[-12000:],
             }
 
 
