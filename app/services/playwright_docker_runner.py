@@ -108,6 +108,15 @@ print(json.dumps({"report": report, "screenshots": screenshots}, separators=(","
 '''
 
 
+def _valid_dns_name(value: str) -> bool:
+    if not isinstance(value, str) or len(value) > 253:
+        return False
+    return all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in value.split(".")
+    )
+
+
 class PlaywrightDockerRunner:
     """Run a bounded Playwright smoke test behind an internal egress gateway."""
 
@@ -132,7 +141,7 @@ class PlaywrightDockerRunner:
             raise ValueError("invalid browser resource limits")
         normalized_domains = {str(x).lower().rstrip(".") for x in allowed_domains}
         if not normalized_domains or any(
-            not re.fullmatch(r"[a-z0-9.-]{1,253}", domain) or ".." in domain
+            !_valid_dns_name(domain)
             for domain in normalized_domains
         ):
             raise ValueError("browser domain allowlist is invalid")
@@ -260,10 +269,14 @@ class PlaywrightDockerRunner:
     def _validate_target(target, allowed_domains):
         if not isinstance(target, str) or len(target) > 2048:
             raise WebRuntimeError("browser target URL is missing or too long")
-        parsed = urlsplit(target)
+        try:
+            parsed = urlsplit(target)
+            port = parsed.port
+        except ValueError as exc:
+            raise WebRuntimeError("browser target URL is malformed") from exc
         host = (parsed.hostname or "").lower().rstrip(".")
-        if parsed.scheme != "https" or not host or parsed.username or parsed.password:
-            raise WebRuntimeError("browser target must be an HTTPS URL without credentials")
+        if parsed.scheme != "https" or not host or parsed.username or parsed.password or port not in (None, 443):
+            raise WebRuntimeError("browser target must be HTTPS on port 443 without credentials")
         try:
             ipaddress.ip_address(host)
             raise WebRuntimeError("IP-literal browser targets are forbidden; use an approved DNS name")
