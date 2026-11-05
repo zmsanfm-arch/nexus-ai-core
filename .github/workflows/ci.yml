@@ -45,7 +45,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Run tests
+      - name: Prepare local digest-pinned image for Docker sandbox integration test
+        run: |
+          set -euo pipefail
+          docker pull busybox:1.36.1
+          image="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' busybox:1.36.1 | head -n1)"
+          case "$image" in
+            *@sha256:*) ;;
+            *) echo "Could not resolve a digest-pinned local BusyBox image" >&2; exit 1 ;;
+          esac
+          echo "NEXUS_TEST_DOCKER_BASE_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Run tests including real offline Docker build
         run: pytest -q
       - name: Install encrypted-backup drill utilities
         run: |
