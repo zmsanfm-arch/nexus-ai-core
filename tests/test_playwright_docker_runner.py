@@ -40,7 +40,7 @@ def test_playwright_target_must_be_https_and_allowlisted():
         runner._validate_target("http://example.com", ["example.com"])
     with pytest.raises(WebRuntimeError, match="allowlist"):
         runner._validate_target("https://example.net", ["example.com"])
-    with pytest.raises(WebRuntimeError, match="non-public"):
+    with pytest.raises(WebRuntimeError, match="IP-literal"):
         runner._validate_target("https://127.0.0.1", ["127.0.0.1"])
 
 
@@ -127,7 +127,7 @@ def test_real_playwright_container_uses_egress_gateway():
         pytest.skip("real isolated Playwright Docker integration is not configured")
     runner = PlaywrightDockerRunner(
         image=image, network=network, proxy_url=proxy_url,
-        proxy_container=proxy_container, timeout_seconds=90,
+        proxy_container=proxy_container, allowed_domains={"example.com"}, timeout_seconds=90,
     )
     request = SpecialistInput(
         task_id="browser-ci", task_type="web.browser.test", request="CI browser smoke test",
