@@ -4,8 +4,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends docker.io \
-    && rm -rf /var/lib/apt/lists/*
+ARG INSTALL_DOCKER_CLI=false
+RUN if [ "$INSTALL_DOCKER_CLI" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends docker.io \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 WORKDIR /app
 RUN addgroup --system nexus && adduser --system --ingroup nexus --home /app nexus
