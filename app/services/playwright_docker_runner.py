@@ -207,6 +207,14 @@ class PlaywrightDockerRunner:
             raise WebRuntimeError("egress network membership is invalid") from exc
         if external_member_names != {self.proxy_container}:
             raise WebRuntimeError("only the approved egress proxy may join its external network")
+        external_gateway = networks[external_network].get("Gateway")
+        if not external_gateway:
+            raise WebRuntimeError("egress proxy external gateway is missing")
+        default_route = self._docker([
+            "exec", self.proxy_container, "ip", "route", "show", "default",
+        ])
+        if external_gateway not in default_route:
+            raise WebRuntimeError("egress proxy default route is not the dedicated external gateway")
         raw_members = self._docker([
             "network", "inspect", network_name,
             "--format", "{{json .Containers}}",
