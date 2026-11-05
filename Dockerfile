@@ -18,7 +18,7 @@ COPY app ./app
 COPY scripts ./scripts
 COPY agents ./agents
 COPY docs ./docs
-RUN mkdir -p /app/data && chown -R nexus:nexus /app
+RUN mkdir -p /app/data/artifacts && chown -R nexus:nexus /app
 USER nexus
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
