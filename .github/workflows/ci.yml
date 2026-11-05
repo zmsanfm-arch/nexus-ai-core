@@ -258,7 +258,7 @@ jobs:
       - name: Run Bandit static security analysis
         run: bandit -r app scripts -ll
 
-browser:
+  browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
