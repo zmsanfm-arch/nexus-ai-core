@@ -210,6 +210,14 @@ jobs:
             sleep 1
           done
           docker logs nexus-egress-proxy 2>&1 | grep -q "egress proxy ready"
+          for attempt in $(seq 1 30); do
+            proxy_health="$(docker inspect --format '{{.State.Health.Status}}' nexus-egress-proxy)"
+            if [ "$proxy_health" = "healthy" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' nexus-egress-proxy)" = "healthy"
           browser_image="$(docker image inspect --format '{{.Id}}' nexus-playwright-runner:ci)"
           NEXUS_TEST_PLAYWRIGHT_IMAGE="$browser_image" \
           NEXUS_TEST_BROWSER_NETWORK=nexus-browser-internal \
