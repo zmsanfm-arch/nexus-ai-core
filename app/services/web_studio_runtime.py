@@ -35,7 +35,7 @@ class OfflineDockerBuild:
                  memory: str = "1g", cpus: str = "1.5"):
         if not 1 <= timeout_seconds <= 900:
             raise ValueError("timeout_seconds outside allowed range")
-        if not re.fullmatch(r"[0-9]+(?:m|g)", memory) or not re.fullmatch(r"[0-9]+(?:\\.[0-9]+)?", cpus):
+        if not re.fullmatch(r"[0-9]+(?:m|g)", memory) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cpus):
             raise ValueError("invalid Docker resource limits")
         if not base_image_allowlist or any("@sha256:" not in x for x in base_image_allowlist):
             raise ValueError("base image allowlist must contain digest-pinned images")
@@ -55,7 +55,7 @@ class OfflineDockerBuild:
         from_images = []
         for line in docker_text.splitlines():
             stripped = line.strip()
-            if stripped and not stripped.startswith("#") and re.match(r"(?i)^FROM\\s+", stripped):
+            if stripped and not stripped.startswith("#") and re.match(r"(?i)^FROM\s+", stripped):
                 parts = stripped.split()
                 image = next((part for part in parts[1:] if not part.startswith("--")), "")
                 if not image or image.lower() == "as" or "@sha256:" not in image:
