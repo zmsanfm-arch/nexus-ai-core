@@ -1,0 +1,9 @@
+agent_id: web_frontend_engineer
+name: Web Frontend Engineer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.frontend.build
+permissions: []
+requested_permissions: []

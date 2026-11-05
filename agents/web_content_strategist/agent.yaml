@@ -1,0 +1,9 @@
+agent_id: web_content_strategist
+name: Web Content Strategist
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.content.plan
+permissions: []
+requested_permissions: []

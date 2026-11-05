@@ -1,0 +1,9 @@
+agent_id: web_security_reviewer
+name: Web Security Reviewer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.security.audit
+permissions: []
+requested_permissions: []
