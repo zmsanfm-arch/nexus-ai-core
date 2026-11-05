@@ -185,7 +185,7 @@ async def main():
         raise SystemExit("NEXUS_EGRESS_PROXY_MODE must be allowlist-v1")
     allowed = load_allowlist(os.getenv("NEXUS_EGRESS_ALLOWED_DOMAINS", ""))
     server = await asyncio.start_server(
-        EgressProxy(allowed).handle, "0.0.0.0",
+        EgressProxy(allowed).handle, "0.0.0.0",  # nosec B104: private Docker network only; no host port is published
         int(os.getenv("NEXUS_EGRESS_PROXY_PORT", "3128")),
         limit=MAX_HEADER,
     )
