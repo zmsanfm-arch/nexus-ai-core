@@ -73,7 +73,7 @@ def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypat
     runner = make_runner()
     responses = iter([
         "true",
-        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy", "Gateway": "172.18.0.1"}}),
         "true",
         "false",
         "bridge",
