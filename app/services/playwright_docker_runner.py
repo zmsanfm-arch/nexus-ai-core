@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+from uuid import uuid4
 from urllib.parse import urlsplit
 
 from app.services.web_studio_runtime import WebRuntimeError
@@ -116,7 +117,7 @@ class PlaywrightDockerRunner:
     ):
         if not (re.fullmatch(r".+@sha256:[a-f0-9]{64}", image) or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
             raise ValueError("Playwright image must be digest-pinned")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}", network):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,39}", network):
             raise ValueError("invalid browser network name")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", proxy_container):
             raise ValueError("invalid egress proxy container name")
@@ -157,13 +158,13 @@ class PlaywrightDockerRunner:
             raise WebRuntimeError("Docker browser isolation preflight failed.")
         return result.stdout.strip()
 
-    def _verify_network(self):
+    def _verify_network(self, network_name):
         internal = self._docker([
-            "network", "inspect", self.network,
+            "network", "inspect", network_name,
             "--format", "{{.Internal}}",
         ])
         if internal.lower() != "true":
-            raise WebRuntimeError("browser Docker network must be internal")
+            raise WebRuntimeError("per-run browser Docker network must be internal")
         raw = self._docker([
             "inspect", self.proxy_container,
             "--format", "{{json .NetworkSettings.Networks}}",
@@ -172,15 +173,21 @@ class PlaywrightDockerRunner:
             networks = json.loads(raw)
         except (TypeError, ValueError) as exc:
             raise WebRuntimeError("egress proxy network membership is invalid") from exc
-        if self.network not in networks or len(networks) != 2:
-            raise WebRuntimeError("egress proxy must join only the internal browser network and one egress network")
-        external_network = next(name for name in networks if name != self.network)
-        if self._docker([
-            "network", "inspect", external_network, "--format", "{{.Internal}}",
-        ]).lower() != "false":
-            raise WebRuntimeError("egress proxy outbound network must not be internal")
+        if network_name not in networks or len(networks) < 2:
+            raise WebRuntimeError("egress proxy is not attached to the per-run browser network")
+        external_networks = []
+        for name in networks:
+            is_internal = self._docker([
+                "network", "inspect", name, "--format", "{{.Internal}}",
+            ]).lower()
+            if is_internal == "false":
+                external_networks.append(name)
+            elif is_internal != "true":
+                raise WebRuntimeError("egress proxy network boundary is ambiguous")
+        if len(external_networks) != 1:
+            raise WebRuntimeError("egress proxy must have exactly one external network")
         raw_members = self._docker([
-            "network", "inspect", self.network,
+            "network", "inspect", network_name,
             "--format", "{{json .Containers}}",
         ])
         try:
