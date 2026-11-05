@@ -121,8 +121,8 @@ class PlaywrightDockerRunner:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", proxy_container):
             raise ValueError("invalid egress proxy container name")
         parsed_proxy = urlsplit(proxy_url)
-        if parsed_proxy.scheme != "http" or not parsed_proxy.hostname or parsed_proxy.username or parsed_proxy.password:
-            raise ValueError("egress proxy must be an internal HTTP proxy endpoint")
+        if parsed_proxy.scheme != "http" or parsed_proxy.hostname != proxy_container or parsed_proxy.username or parsed_proxy.password:
+            raise ValueError("egress proxy URL must resolve to the configured internal proxy container")
         if not 5 <= timeout_seconds <= 180:
             raise ValueError("browser timeout outside permitted range")
         if not re.fullmatch(r"[0-9]+(?:m|g)", memory) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cpus):
@@ -172,6 +172,25 @@ class PlaywrightDockerRunner:
             raise WebRuntimeError("browser network membership is invalid") from exc
         if member_names != {self.proxy_container}:
             raise WebRuntimeError("only the approved egress proxy may join the browser network")
+        raw_env = self._docker([
+            "inspect", self.proxy_container,
+            "--format", "{{json .Config.Env}}",
+        ])
+        try:
+            env_items = json.loads(raw_env)
+            proxy_env = dict(item.split("=", 1) for item in env_items if "=" in item)
+            if proxy_env.get("NEXUS_EGRESS_PROXY_MODE") != "allowlist-v1":
+                raise ValueError("proxy mode missing")
+            proxy_domains = {
+                item.strip().lower().rstrip(".")
+                for item in proxy_env.get("NEXUS_EGRESS_ALLOWED_DOMAINS", "").split(",")
+                if item.strip()
+            }
+            if not proxy_domains:
+                raise ValueError("proxy allowlist missing")
+        except (TypeError, ValueError) as exc:
+            raise WebRuntimeError("egress proxy allowlist configuration is not verified") from exc
+        return proxy_domains
 
     @staticmethod
     def _validate_target(target, allowed_domains):
@@ -182,9 +201,8 @@ class PlaywrightDockerRunner:
         if parsed.scheme != "https" or not host or parsed.username or parsed.password:
             raise WebRuntimeError("browser target must be an HTTPS URL without credentials")
         try:
-            address = ipaddress.ip_address(host)
-            if not address.is_global:
-                raise WebRuntimeError("non-public IP browser targets are forbidden")
+            ipaddress.ip_address(host)
+            raise WebRuntimeError("IP-literal browser targets are forbidden; use an approved DNS name")
         except ValueError:
             pass
         if not isinstance(allowed_domains, list) or not allowed_domains:
@@ -205,7 +223,9 @@ class PlaywrightDockerRunner:
         allowed = self._validate_target(target, policy.get("allowed_domains"))
         if policy.get("egress_proxy_id") != self.proxy_container:
             raise WebRuntimeError("browser egress proxy identity does not match central policy")
-        self._verify_network()
+        proxy_domains = self._verify_network()
+        if not allowed.issubset(proxy_domains):
+            raise WebRuntimeError("mission domain allowlist exceeds the egress proxy allowlist")
         self._docker(["image", "inspect", self.image])
         payload = {
             "target_url": target,
