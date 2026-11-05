@@ -17,7 +17,7 @@
 <div class="form-grid"><label>Mission ID<input id="missionId" maxlength="64" value="web_studio_project"></label><label>Mission name<input id="missionName" maxlength="120" value="Web Studio project"></label></div>
 <label>Objective<textarea id="objective" rows="3" maxlength="4000" placeholder="Describe the outcome and constraints"></textarea></label>
 <label>Mission nodes · JSON<textarea id="nodes" rows="8" spellcheck="false" placeholder='[{"node_id":"step_1","agent_id":"ID_FROM_REGISTRY","capability":"CAPABILITY_FROM_REGISTRY","dependencies":[],"max_attempts":1}]'></textarea></label><p class="hint">Use only an agent ID and capability shown as eligible in the registry. Creation stays locked when no eligible agents are enabled.</p>
-<div class="actions"><button id="createMission">Validate &amp; save mission</button><button id="enqueueRun" disabled>Enqueue mission run</button></div><div id="missionResult" class="result muted">No mission selected.</div>
+<div class="actions"><button id="createMission" disabled>Validate &amp; save mission</button><button id="enqueueRun" disabled>Enqueue mission run</button></div><div id="missionResult" class="result muted">No mission selected.</div>
 </section>
 <section class="grid">
 <article class="panel"><div class="panel-head"><div><div class="eyebrow">04 / RUN STATUS</div><h2>Mission run</h2></div><button id="refreshRun" class="quiet" disabled>Refresh</button></div><label>Mission ID<input id="runMissionId" placeholder="Mission ID"></label><label>Run ID<input id="runId" placeholder="Run ID"></label><div id="runResult" class="result muted">No run selected.</div></article>
