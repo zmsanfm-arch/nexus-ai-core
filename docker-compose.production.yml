@@ -80,9 +80,6 @@ services:
       NEXUS_WORKER_LEASE_SECONDS: ${NEXUS_WORKER_LEASE_SECONDS:-600}
       NEXUS_WORKER_MAX_ATTEMPTS: ${NEXUS_WORKER_MAX_ATTEMPTS:-3}
       NEXUS_WORKER_RETRY_DELAY_SECONDS: ${NEXUS_WORKER_RETRY_DELAY_SECONDS:-30}
-      NEXUS_BROWSER_DOCKER_CERT_PATH: /run/browser-docker-certs
-    volumes:
-      - ${NEXUS_BROWSER_DOCKER_CERTS_PATH:-./secrets/browser-docker}:/run/browser-docker-certs:ro
     depends_on:
       api:
         condition: service_healthy
@@ -95,6 +92,37 @@ services:
     networks: [backend]
     # Worker has no published ports. Only general advisory tasks are enabled.
 
+  mission-worker:
+    profiles: ["mission-worker"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.mission_worker_entrypoint"]
+    restart: unless-stopped
+    stop_grace_period: 7m
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      NEXUS_SKIP_MIGRATIONS: "true"
+      NEXUS_MISSION_WORKER_POLL_SECONDS: ${NEXUS_MISSION_WORKER_POLL_SECONDS:-2}
+      NEXUS_MISSION_WORKER_LEASE_SECONDS: ${NEXUS_MISSION_WORKER_LEASE_SECONDS:-600}
+      NEXUS_ARTIFACT_ROOT: /app/data/artifacts
+      NEXUS_BROWSER_DOCKER_CERT_PATH: /run/browser-docker-certs
+    volumes:
+      - mission_artifacts:/app/data/artifacts
+      - ${NEXUS_BROWSER_DOCKER_CERTS_PATH:-./secrets/browser-docker}:/run/browser-docker-certs:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [backend]
+    # No Docker socket is mounted. Browser builds use a dedicated remote Docker daemon over mTLS.
 
   proxy:
     image: caddy:2
@@ -119,6 +147,7 @@ services:
 
 volumes:
   postgres_data:
+  mission_artifacts:
   caddy_data:
   caddy_config:
 
