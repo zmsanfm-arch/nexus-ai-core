@@ -44,6 +44,13 @@ The runner refuses to activate if the image, remote TLS Docker endpoint/certific
 - The current worker is sequential. The DAG compiler validates dependencies; this increment does not claim parallel execution.
 - The browser E2E test proves the browser -> screenshot/report artifacts -> mission worker -> final report path in CI. It is not a substitute for production-host network validation.
 - CI security scanners and internal tests are not an independent security assessment. A reviewer who did not implement this code must assess the threat model, proxy, Docker daemon boundary, artifact isolation, and failure/recovery paths.
-- PostgreSQL concurrency tests and the encrypted backup/restore drill run in CI. Production load thresholds, real alert delivery, and a production recovery exercise still require the operator's isolated environment and monitoring endpoints.
+- PostgreSQL concurrency tests and the encrypted backup/restore drill run in CI. Mission artifacts now have separate encrypted backup and verified restore scripts; they reject symlinks, unsafe archive paths, non-regular files, ownership mismatches, and content-hash mismatches. Production load thresholds, real alert delivery, and a production recovery exercise still require the operator's isolated environment and monitoring endpoints.
+
+## Mission artifact backup and restore
+
+- Run `scripts/backup_mission_artifacts_encrypted.sh` with `NEXUS_ARTIFACT_ROOT`, `AGE_RECIPIENT`, and `BACKUP_DIR`. The encrypted archive and SHA-256 sidecar are written outside the artifact volume.
+- Run `scripts/restore_mission_artifacts_drill.sh` with `BACKUP_FILE`, `AGE_IDENTITY_FILE`, an empty `NEXUS_RESTORE_ARTIFACT_ROOT`, and `NEXUS_RESTORE_CONFIRM=YES`. The script validates archive paths and artifact ownership/integrity before copying data into the empty target.
+- CI generates a temporary age identity, creates a real Artifact Store entry, encrypts a backup, removes the source, restores into an empty directory, and reads the artifact back through `LocalArtifactStore`.
+- Store the age identity separately from encrypted backups. The repository operator owns the recipient/identity lifecycle and off-host backup retention.
 - Production secrets/key management, server provisioning, DNS, TLS certificates, and deployment are owned by the repository operator and are not acceptance gates for this code change.
 - Live trading, external execution, image push, and automatic deployment remain disabled.
