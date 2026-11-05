@@ -142,7 +142,6 @@ jobs:
           test -n "$base_image"
           docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.browser-egress -t nexus-browser-egress:ci .
           docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.playwright-runner -t nexus-playwright-runner:ci .
-          docker network create --internal nexus-browser-internal
           docker network create nexus-browser-egress
           docker run -d --name nexus-egress-proxy --network nexus-browser-egress \
             -e NEXUS_EGRESS_PROXY_MODE=allowlist-v1 \
@@ -151,7 +150,7 @@ jobs:
           docker network connect nexus-browser-internal nexus-egress-proxy
           cleanup() {
             docker rm -f nexus-egress-proxy >/dev/null 2>&1 || true
-            docker network rm nexus-browser-internal nexus-browser-egress >/dev/null 2>&1 || true
+            docker network rm nexus-browser-egress >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           for attempt in $(seq 1 30); do
