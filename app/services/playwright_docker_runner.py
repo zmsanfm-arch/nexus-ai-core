@@ -298,7 +298,9 @@ class PlaywrightDockerRunner:
             match = re.search(r"https://[A-Za-z0-9.-]+(?::443)?(?:/[^\s]*)?", request.request)
             target = match.group(0).rstrip(".,;)]}") if match else None
         allowed = self._validate_target(target, sorted(self.allowed_domains))
-        network_name = f"{self.network}-{uuid4().hex[:12]}"
+        run_id = uuid4().hex[:12]
+        network_name = f"{self.network}-{run_id}"
+        container_name = f"nexus-browser-{run_id}"
         self._docker(["network", "create", "--internal", network_name])
         connected = False
         try:
@@ -315,7 +317,8 @@ class PlaywrightDockerRunner:
                 "timeout_seconds": self.timeout_seconds,
             }
             command = [
-                self.docker_binary, "run", "--rm",
+                self.docker_binary, "run",
+                "--name", container_name,
                 "--network", network_name,
                 "--read-only",
                 "--cap-drop", "ALL",
@@ -362,6 +365,10 @@ class PlaywrightDockerRunner:
             except (KeyError, TypeError, ValueError) as exc:
                 raise WebRuntimeError("isolated browser returned an invalid result") from exc
         finally:
+            try:
+                self._docker(["rm", "-f", container_name])
+            except WebRuntimeError:
+                pass
             if connected:
                 try:
                     self._docker(["network", "disconnect", self.proxy_container, network_name])
