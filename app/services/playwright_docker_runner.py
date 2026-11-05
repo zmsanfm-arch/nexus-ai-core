@@ -186,6 +186,22 @@ class PlaywrightDockerRunner:
                 raise WebRuntimeError("egress proxy network boundary is ambiguous")
         if len(external_networks) != 1:
             raise WebRuntimeError("egress proxy must have exactly one external network")
+        external_network = external_networks[0]
+        if self._docker([
+            "network", "inspect", external_network, "--format", "{{.Driver}}",
+        ]) != "bridge":
+            raise WebRuntimeError("egress proxy must use a dedicated bridge egress network")
+        raw_external_members = self._docker([
+            "network", "inspect", external_network,
+            "--format", "{{json .Containers}}",
+        ])
+        try:
+            external_members = json.loads(raw_external_members or "{}")
+            external_member_names = {item.get("Name") for item in external_members.values()}
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise WebRuntimeError("egress network membership is invalid") from exc
+        if external_member_names != {self.proxy_container}:
+            raise WebRuntimeError("only the approved egress proxy may join its external network")
         raw_members = self._docker([
             "network", "inspect", network_name,
             "--format", "{{json .Containers}}",
