@@ -111,6 +111,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Validate production Compose model
+        run: |
+          set -euo pipefail
+          cat > .env.production <<'ENV'
+          POSTGRES_DB=nexus_ci
+          POSTGRES_USER=nexus_ci
+          POSTGRES_PASSWORD=ci-only-placeholder
+          NEXUS_DOMAIN=example.com
+          ENV
+          docker compose -f docker-compose.production.yml config --quiet
+          rm -f .env.production
       - name: Build container
         run: docker build --tag nexus-ai-core:ci .
       - name: Smoke-test container startup and health
