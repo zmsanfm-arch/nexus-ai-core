@@ -335,7 +335,7 @@ class PlaywrightDockerRunner:
                 "--memory", self.memory,
                 "--cpus", self.cpus,
                 "--shm-size", "256m",
-                "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
+                "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",  # nosec B108: isolated container tmpfs, not a host temporary directory
                 "--user", "1000:1000",
                 "--env", "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
                 "--env", "HOME=/tmp",
