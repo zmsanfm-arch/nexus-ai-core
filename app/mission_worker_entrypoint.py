@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.agents.ict_mentor import ICTMentorHandler
+from app.agents.web_studio import WEB_STUDIO_ROLE_PROMPTS, WebStudioSpecialistHandler
 from app.services.artifact_store import LocalArtifactStore
 from app.services.knowledge_store import KnowledgeStoreAdapter
 from app.services.mission_run_repository import MissionRunRepository
@@ -38,7 +39,13 @@ def run() -> None:
     artifact_store = LocalArtifactStore(artifact_root)
     worker = MissionRunWorker(
         repository=MissionRunRepository(store), registry=registry,
-        handlers={"ict_mentor": ICTMentorHandler(model_router, knowledge_store)},
+        handlers={
+            "ict_mentor": ICTMentorHandler(model_router, knowledge_store),
+            **{
+                agent_id: WebStudioSpecialistHandler(agent_id, model_router)
+                for agent_id in WEB_STUDIO_ROLE_PROMPTS
+            },
+        },
         storage=store,
         worker_id=f"{os.getenv('NEXUS_MISSION_WORKER_ID', socket.gethostname())[:100]}-{uuid4().hex[:16]}",
         lease_seconds=lease_seconds, artifact_store=artifact_store,
