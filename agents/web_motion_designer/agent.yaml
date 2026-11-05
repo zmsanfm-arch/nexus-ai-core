@@ -1,0 +1,9 @@
+agent_id: web_motion_designer
+name: Web Motion Designer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.motion.design
+permissions: []
+requested_permissions: []

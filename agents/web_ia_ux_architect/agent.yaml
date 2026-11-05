@@ -1,0 +1,9 @@
+agent_id: web_ia_ux_architect
+name: Web IA UX Architect
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.ux.architecture
+permissions: []
+requested_permissions: []

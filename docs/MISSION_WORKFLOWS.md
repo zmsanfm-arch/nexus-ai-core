@@ -72,4 +72,38 @@ nodes:
 
 ## Current implementation boundary
 
+Mission definitions can now be submitted through authenticated `POST /missions` and read through principal-scoped `GET /missions/{mission_id}`. Definitions are schema-validated, checked against registered advisory agents and each agent's declared capability grants, and persisted in the SQL database using migration `0004_missions`. A mission ID is unique; reads by another principal return not found. These endpoints only define and retrieve missions: they do not enqueue or execute them. The API explicitly returns `execution_available: false` until a durable execution coordinator and correctly wired specialist/auditor handlers are implemented.
+
 The current increment adds a sequential advisory-only mission runtime for installed specialist handlers. It checks registered/enabled agent state, declared capability, central permission policy, and handler presence before each node; it passes only completed dependency outputs, bounds specialist output to 16 KiB, and applies bounded per-node attempts. A separately injected auditor receives the bounded combined output and must return a strict `pass`, `revise`, or `block` verdict. Only `pass` yields `status: completed`; missing auditor leaves `nodes_succeeded`, and invalid or failed audit returns `audit_failed`. No connector, credentials, external-action API, or publishing interface is exposed. Dynamic routing, parallel scheduling, persistent mission definitions, UI management, external connectors, media generation, and autonomous publishing remain unimplemented.
+
+
+## Durable mission execution
+
+Mission definitions can be submitted to the dedicated durable run queue with
+`POST /missions/{mission_id}/runs` and a caller-generated
+`Idempotency-Key` header. Repeated submissions for the same principal,
+mission, and key return the original run rather than enqueueing another run.
+Run status and per-node checkpoints are available through
+`GET /missions/{mission_id}/runs/{run_id}`; reads remain principal-scoped.
+
+The `mission_runs`, `mission_node_runs`, and `mission_queue` tables persist
+run state, per-node status/output/attempt count, and worker leases. Workers
+claim rows transactionally with `FOR UPDATE SKIP LOCKED`. An expired lease
+makes a run claimable again. A recovered worker skips nodes with durable
+`completed` checkpoints and continues from unfinished nodes. Lease ownership
+is checked on checkpoint and completion writes, so a stale worker cannot
+overwrite a newer worker's state.
+
+Execution is **at-least-once** for an in-flight handler: a process crash after
+the handler returns but before its checkpoint commits can cause that handler
+to be called again after lease recovery. Run enqueue is idempotent and
+completed node checkpoints are not repeated; exactly-once execution of an
+arbitrary remote/model call cannot be guaranteed by a database transaction.
+Handlers must therefore remain advisory and tolerate retries.
+
+The mission worker service is a separate process and must be deployed and
+supervised against the same PostgreSQL database before queued runs will
+progress. The API can durably accept and report runs even while no worker is
+available. This worker has no external-action, publishing, payment, broker,
+or credential interface. Human approval remains mandatory for any future
+external action implementation.
