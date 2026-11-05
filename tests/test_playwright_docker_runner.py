@@ -57,6 +57,7 @@ def test_playwright_runner_verifies_internal_proxy_only_network(monkeypatch):
         "true",
         json.dumps({"net-a": {"Name": "nexus-egress-proxy"}, "net-b": {"Name": "bridge"}}),
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
+        json.dumps(["NEXUS_EGRESS_PROXY_MODE=allowlist-v1", "NEXUS_EGRESS_ALLOWED_DOMAINS=example.com,example.net"]),
     ])
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: next(responses))
     runner._verify_network()
@@ -79,7 +80,7 @@ def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypat
 
 def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypatch):
     runner = make_runner()
-    monkeypatch.setattr(runner, "_verify_network", lambda: None)
+    monkeypatch.setattr(runner, "_verify_network", lambda: {"example.com"})
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: "")
     monkeypatch.setattr("app.services.playwright_docker_runner.shutil.which", lambda _: "/usr/bin/docker")
     screenshot = base64.b64encode(b"png-data").decode()
