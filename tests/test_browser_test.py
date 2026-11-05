@@ -1,4 +1,6 @@
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Thread
 
 import pytest
@@ -39,10 +41,14 @@ def test_browser_tester_rejects_non_loopback_targets(tmp_path):
         tester.inspect("https://example.com", tmp_path)
 
 
-def test_browser_tester_captures_local_fixture(tmp_path, fixture_url):
+def test_browser_tester_captures_local_fixture_at_three_viewports(tmp_path, fixture_url):
     pytest.importorskip("playwright")
-    report = PlaywrightLocalTester().inspect(fixture_url, tmp_path)
-    assert report["passed"] is True
-    assert report["title"] == "NEXUS fixture"
-    assert report["blocked_external_requests"] == []
-    assert (tmp_path / "browser-check.png").is_file()
+    tester = PlaywrightLocalTester()
+    output_root = Path(os.getenv("NEXUS_BROWSER_ARTIFACT_DIR", str(tmp_path))).resolve()
+    viewports = {"mobile": (390, 844), "tablet": (768, 1024), "desktop": (1365, 900)}
+    for name, viewport in viewports.items():
+        report = tester.inspect(fixture_url, output_root / name, viewport=viewport)
+        assert report["passed"] is True
+        assert report["title"] == "NEXUS fixture"
+        assert report["blocked_external_requests"] == []
+        assert (output_root / name / "browser-check.png").is_file()

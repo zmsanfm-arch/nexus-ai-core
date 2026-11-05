@@ -161,4 +161,13 @@ jobs:
       - name: Install Chromium
         run: python -m playwright install --with-deps chromium
       - name: Run local-fixture browser verification
+        env:
+          NEXUS_BROWSER_ARTIFACT_DIR: artifacts/browser-test
         run: pytest -q tests/test_browser_test.py
+      - name: Preserve browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-browser-fixture-screenshots
+          path: artifacts/browser-test/
+          if-no-files-found: ignore
