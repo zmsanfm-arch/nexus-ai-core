@@ -55,11 +55,12 @@ def test_playwright_runner_verifies_internal_proxy_only_network(monkeypatch):
     runner = make_runner()
     responses = iter([
         "true",
-        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy"}}),
+        json.dumps({"nexus-browser-internal-abc": {"Name": "nexus-egress-proxy"}, "bridge": {"Name": "nexus-egress-proxy", "Gateway": "172.18.0.1"}}),
         "true",
         "false",
         "bridge",
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
+        "default via 172.18.0.1 dev eth0",
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
         json.dumps(["NEXUS_EGRESS_PROXY_MODE=allowlist-v1", "NEXUS_EGRESS_ALLOWED_DOMAINS=example.com,example.net"]),
         json.dumps({"com.nexus.component": "browser-egress-proxy", "com.nexus.egress-policy": "allowlist-v1"}),
@@ -77,6 +78,7 @@ def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypat
         "false",
         "bridge",
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
+        "default via 172.18.0.1 dev eth0",
         json.dumps({
             "proxy-id": {"Name": "nexus-egress-proxy"},
             "other-id": {"Name": "untrusted-container"},
