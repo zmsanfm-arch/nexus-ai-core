@@ -116,6 +116,8 @@ class EgressProxy:
             remote_writer = None
             try:
                 line = await asyncio.wait_for(reader.readline(), timeout=5)
+                if not line:
+                    return
                 if len(line) > 2048:
                     raise ValueError("CONNECT request line too large")
                 parts = line.decode("ascii", errors="strict").strip().split()
