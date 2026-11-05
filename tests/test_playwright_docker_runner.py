@@ -17,7 +17,7 @@ def make_runner():
         image=IMAGE,
         network="nexus-browser-internal",
         proxy_url="http://nexus-egress-proxy:3128",
-        proxy_container="nexus-egress-proxy",
+        proxy_container="nexus-egress-proxy", allowed_domains={"example.com"},
     )
 
 
@@ -27,7 +27,7 @@ def test_playwright_runner_requires_digest_pinned_image():
             image="mcr.microsoft.com/playwright/python:latest",
             network="nexus-browser-internal",
             proxy_url="http://nexus-egress-proxy:3128",
-            proxy_container="nexus-egress-proxy",
+            proxy_container="nexus-egress-proxy", allowed_domains={"example.com"},
         )
 
 
@@ -47,7 +47,7 @@ def test_playwright_target_must_be_https_and_allowlisted():
 def test_playwright_runner_fails_closed_without_trusted_policy():
     runner = make_runner()
     request = SpecialistInput(task_id="m1", task_type="web.browser.test", request="test")
-    with pytest.raises(WebRuntimeError, match="trusted browser policy"):
+    with pytest.raises(WebRuntimeError, match="target URL"):
         runner(request)
 
 
@@ -103,10 +103,6 @@ def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypat
         task_id="m1", task_type="web.browser.test", request="run",
         context={
             "browser_target_url": "https://example.com",
-            "browser_policy": {
-                "allowed_domains": ["example.com"],
-                "egress_proxy_id": "nexus-egress-proxy",
-            },
         },
     )
     result = runner(request)
@@ -135,13 +131,7 @@ def test_real_playwright_container_uses_egress_gateway():
     )
     request = SpecialistInput(
         task_id="browser-ci", task_type="web.browser.test", request="CI browser smoke test",
-        context={
-            "browser_target_url": "https://example.com",
-            "browser_policy": {
-                "allowed_domains": ["example.com"],
-                "egress_proxy_id": proxy_container,
-            },
-        },
+        context={"browser_target_url": "https://example.com"},
     )
     result = runner(request)
     assert result["report"]["status"] == "completed"
