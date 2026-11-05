@@ -39,6 +39,8 @@ def test_build_command_is_network_isolated_and_never_pulls(tmp_path, monkeypatch
     assert "--network=none" in command
     assert "--pull=false" in command
     assert "--no-cache" in command
+    assert "--file" not in command  # stdin tar context already carries Dockerfile
+    assert command[-1] == "-"
     assert kwargs["timeout"] == 300
     assert kwargs["env"]["DOCKER_BUILDKIT"] == "1"
 
