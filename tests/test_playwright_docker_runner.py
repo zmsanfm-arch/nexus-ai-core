@@ -148,3 +148,49 @@ def test_real_playwright_container_uses_egress_gateway():
     assert result["report"]["checks"]["navigation"] is True
     assert result["screenshots"]
     assert result["screenshots"][0]["content"].startswith(b"\\x89PNG")
+
+
+def test_playwright_runner_from_env_requires_mutual_tls_and_client_certificates(monkeypatch, tmp_path):
+    from app.services.playwright_docker_runner import playwright_runner_from_env
+    cert_dir = tmp_path / "docker-certs"
+    cert_dir.mkdir()
+    for name in ("ca.pem", "cert.pem", "key.pem"):
+        (cert_dir / name).write_text("test-certificate")
+    values = {
+        "NEXUS_PLAYWRIGHT_IMAGE": IMAGE,
+        "NEXUS_BROWSER_INTERNAL_NETWORK": "nexus-browser",
+        "NEXUS_BROWSER_EGRESS_PROXY_URL": "http://nexus-egress-proxy:3128",
+        "NEXUS_BROWSER_EGRESS_PROXY_CONTAINER": "nexus-egress-proxy",
+        "NEXUS_BROWSER_ALLOWED_DOMAINS": "example.com",
+        "NEXUS_BROWSER_DOCKER_HOST": "tcp://browser-host.internal:2376",
+        "NEXUS_BROWSER_DOCKER_TLS_VERIFY": "1",
+        "NEXUS_BROWSER_DOCKER_CERT_PATH": str(cert_dir),
+    }
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    runner = playwright_runner_from_env()
+    assert runner.docker_env["DOCKER_HOST"] == values["NEXUS_BROWSER_DOCKER_HOST"]
+    assert runner.docker_env["DOCKER_TLS_VERIFY"] == "1"
+    assert runner.docker_env["DOCKER_CERT_PATH"] == str(cert_dir)
+
+
+def test_playwright_runner_from_env_rejects_plaintext_remote_docker(monkeypatch, tmp_path):
+    from app.services.playwright_docker_runner import playwright_runner_from_env
+    cert_dir = tmp_path / "docker-certs"
+    cert_dir.mkdir()
+    for name in ("ca.pem", "cert.pem", "key.pem"):
+        (cert_dir / name).write_text("test-certificate")
+    values = {
+        "NEXUS_PLAYWRIGHT_IMAGE": IMAGE,
+        "NEXUS_BROWSER_INTERNAL_NETWORK": "nexus-browser",
+        "NEXUS_BROWSER_EGRESS_PROXY_URL": "http://nexus-egress-proxy:3128",
+        "NEXUS_BROWSER_EGRESS_PROXY_CONTAINER": "nexus-egress-proxy",
+        "NEXUS_BROWSER_ALLOWED_DOMAINS": "example.com",
+        "NEXUS_BROWSER_DOCKER_HOST": "tcp://browser-host.internal:2375",
+        "NEXUS_BROWSER_DOCKER_TLS_VERIFY": "0",
+        "NEXUS_BROWSER_DOCKER_CERT_PATH": str(cert_dir),
+    }
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    with pytest.raises(ValueError, match="mutually authenticated TLS"):
+        playwright_runner_from_env()
