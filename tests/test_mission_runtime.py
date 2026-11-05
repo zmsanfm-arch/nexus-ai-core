@@ -56,7 +56,24 @@ class Handler:
         )
 
 
-def runtime(handler, permissions=None):
+class Auditor:
+    def __init__(self, verdict="pass"):
+        self.verdict = verdict
+        self.calls = 0
+        self.received = None
+
+    def audit(self, *, mission, outputs):
+        self.calls += 1
+        self.received = (mission, outputs)
+        return {
+            "verdict": self.verdict,
+            "summary": "Independent review completed.",
+            "findings": [],
+            "limitations": [],
+        }
+
+
+def runtime(handler, permissions=None, auditor=None):
     policy = PermissionService(
         capability_permissions={"demo.read": "payload.read"},
         allowed_permissions=frozenset({"payload.read"}),
@@ -66,7 +83,9 @@ def runtime(handler, permissions=None):
             capability_permissions={"demo.read": "payload.read"},
             allowed_permissions=frozenset(permissions),
         )
-    return MissionRuntime(Registry(), InMemoryStore(), {"demo_agent": handler}, policy)
+    return MissionRuntime(
+        Registry(), InMemoryStore(), {"demo_agent": handler}, policy, auditor
+    )
 
 
 def test_runtime_executes_nodes_sequentially_and_passes_dependency_outputs():
@@ -109,3 +128,37 @@ def test_runtime_does_not_complete_after_attempt_limit():
     assert result["status"] == "failed"
     assert result["failed_node"] == "research"
     assert handler.calls == 1
+
+
+def test_mission_is_completed_only_after_independent_auditor_passes():
+    handler = Handler()
+    auditor = Auditor("pass")
+    result = runtime(handler, auditor=auditor).execute(mission(), task_id="task-5")
+    assert result["status"] == "completed"
+    assert result["final_audit"]["verdict"] == "pass"
+    assert auditor.calls == 1
+    assert set(auditor.received[1]) == {"research", "review"}
+
+
+@pytest.mark.parametrize(
+    ("verdict", "expected_status"),
+    [("revise", "review_required"), ("block", "blocked")],
+)
+def test_auditor_non_pass_verdict_never_completes_mission(verdict, expected_status):
+    result = runtime(Handler(), auditor=Auditor(verdict)).execute(
+        mission(), task_id=f"task-{verdict}"
+    )
+    assert result["status"] == expected_status
+    assert result["final_audit"]["verdict"] == verdict
+
+
+def test_auditor_contract_failure_fails_closed():
+    class InvalidAuditor:
+        def audit(self, *, mission, outputs):
+            return {"verdict": "approve", "summary": "invalid"}
+
+    result = runtime(Handler(), auditor=InvalidAuditor()).execute(
+        mission(), task_id="task-invalid-audit"
+    )
+    assert result["status"] == "audit_failed"
+    assert result["final_audit"] == "failed"

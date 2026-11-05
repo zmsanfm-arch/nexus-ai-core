@@ -215,3 +215,31 @@ def test_health_and_readiness_probes_are_exempt_from_principal_limits(monkeypatc
     assert client.get("/health", headers=headers).status_code == 200
     assert client.get("/ready", headers=headers).status_code == 200
     assert client.get("/ready", headers=headers).status_code == 200
+
+
+def test_artifact_download_requires_api_auth(monkeypatch):
+    monkeypatch.delenv("NEXUS_API_TOKEN", raising=False)
+    response = TestClient(app).get("/artifacts/" + "a" * 32)
+    assert response.status_code == 503
+
+
+def test_artifact_download_is_scoped_to_authenticated_principal(monkeypatch, tmp_path):
+    from app import main
+    from app.services.artifact_store import LocalArtifactStore
+
+    monkeypatch.setenv("NEXUS_API_TOKEN", "artifact-api-token")
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "artifact-owner")
+    monkeypatch.setattr(main, "artifact_store", LocalArtifactStore(tmp_path / "artifacts"))
+    artifact = main.artifact_store.put("artifact-owner", b"private build output", media_type="text/plain")
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer artifact-api-token"}
+
+    own = client.get(f"/artifacts/{artifact['artifact_id']}", headers=headers)
+    assert own.status_code == 200
+    assert own.content == b"private build output"
+    assert own.headers["cache-control"] == "private, no-store"
+    assert own.headers["x-content-type-options"] == "nosniff"
+
+    monkeypatch.setenv("NEXUS_API_CLIENT_ID", "another-principal")
+    other = client.get(f"/artifacts/{artifact['artifact_id']}", headers=headers)
+    assert other.status_code == 404

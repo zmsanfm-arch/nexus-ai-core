@@ -1,0 +1,9 @@
+agent_id: web_accessibility_specialist
+name: Web Accessibility Specialist
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.accessibility.audit
+permissions: []
+requested_permissions: []
