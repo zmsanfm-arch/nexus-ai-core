@@ -1,0 +1,9 @@
+agent_id: web_maintenance_agent
+name: Web Maintenance Agent
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.maintenance.review
+permissions: []
+requested_permissions: []

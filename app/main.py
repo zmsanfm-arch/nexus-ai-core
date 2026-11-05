@@ -5,10 +5,12 @@ import os
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
 from app.services.mission_contract import MissionDefinition, MissionContractError, compile_mission
 from app.services.mission_repository import MissionAlreadyExists, MissionRepository
+from app.services.mission_run_repository import MissionRunRepository
+from app.services.artifact_store import ArtifactNotFound, LocalArtifactStore
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
 from app.services.governance import GovernanceService
@@ -99,6 +101,8 @@ orchestrator = Orchestrator(registry, governance, store, model_router)
 task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
 mission_repository = MissionRepository(store)
+mission_run_repository = MissionRunRepository(store)
+artifact_store = LocalArtifactStore(os.getenv("NEXUS_ARTIFACT_ROOT", "./data/artifacts"))
 
 
 def require_api_access(authorization: str | None = Header(default=None)) -> str:
@@ -197,7 +201,7 @@ def create_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": False,
+        "execution_available": True,
     }
 
 
@@ -214,6 +218,48 @@ def get_mission(
         "execution_status": "not_started",
         "execution_available": False,
     }
+
+
+@app.post("/missions/{mission_id}/runs")
+def enqueue_mission_run(mission_id: str, idempotency_key: str = Header(..., alias="Idempotency-Key"), principal_id: str = Depends(require_api_access)):
+    """Enqueue a principal-owned mission run; repeated keys return the same run."""
+    mission = mission_repository.get(mission_id, principal_id)
+    if mission is None:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    try:
+        run = mission_run_repository.enqueue(mission_id, principal_id, idempotency_key, mission)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    store.append_audit({"event": "mission_run_enqueued", "mission_id": mission_id, "run_id": run["run_id"], "principal_id": principal_id})
+    return {"run": run, "execution_status": run["status"]}
+
+
+@app.get("/missions/{mission_id}/runs/{run_id}")
+def get_mission_run(mission_id: str, run_id: str, principal_id: str = Depends(require_api_access)):
+    run = mission_run_repository.get(run_id, principal_id)
+    if run is None or run["mission_id"] != mission_id:
+        raise HTTPException(status_code=404, detail="Mission run not found")
+    return {"run": run}
+
+@app.get("/artifacts/{artifact_id}")
+def get_artifact(artifact_id: str, principal_id: str = Depends(require_api_access)):
+    """Download an artifact only when it belongs to the authenticated principal."""
+    try:
+        metadata, content = artifact_store.get(principal_id, artifact_id)
+    except ArtifactNotFound as exc:
+        raise HTTPException(status_code=404, detail="Artifact not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Artifact integrity validation failed") from exc
+    return Response(
+        content=content,
+        media_type=metadata["media_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{artifact_id}.bin"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-Artifact-SHA256": metadata["sha256"],
+        },
+    )
 
 
 @app.post("/tasks", response_model=TaskView)

@@ -1,0 +1,9 @@
+agent_id: web_seo_specialist
+name: Web SEO Specialist
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.seo.audit
+permissions: []
+requested_permissions: []

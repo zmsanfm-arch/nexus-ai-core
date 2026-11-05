@@ -1,0 +1,9 @@
+agent_id: web_studio_orchestrator
+name: Web Studio Orchestrator
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.mission.orchestrate
+permissions: []
+requested_permissions: []

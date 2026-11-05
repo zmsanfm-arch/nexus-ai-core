@@ -1,0 +1,9 @@
+agent_id: web_release_engineer
+name: Web Release Engineer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.release.prepare
+permissions: []
+requested_permissions: []

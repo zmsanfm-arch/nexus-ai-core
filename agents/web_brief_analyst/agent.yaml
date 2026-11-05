@@ -1,0 +1,9 @@
+agent_id: web_brief_analyst
+name: Web Brief Analyst
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.brief.analyze
+permissions: []
+requested_permissions: []
