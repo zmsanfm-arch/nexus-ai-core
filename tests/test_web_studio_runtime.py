@@ -97,3 +97,27 @@ def test_all_web_studio_capabilities_have_central_permissions():
     }
     assert expected <= set(CAPABILITY_PERMISSIONS)
     assert {CAPABILITY_PERMISSIONS[key] for key in expected} <= CORE_ALLOWED_PERMISSIONS
+
+
+def test_offline_build_runs_against_real_docker_daemon(tmp_path, monkeypatch):
+    """CI integration gate: exercise the adapter against a pre-pulled local image."""
+    import os
+
+    image = os.environ.get("NEXUS_TEST_DOCKER_BASE_IMAGE")
+    if not image:
+        pytest.skip("real Docker integration image is not configured")
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {image}\\nRUN echo sandbox-ok > /sandbox-proof\\n"
+    )
+    builder = OfflineDockerBuild(
+        base_image_allowlist={image},
+        timeout_seconds=180,
+        memory="1g",
+        cpus="2",
+    )
+    result = builder.build(tmp_path)
+    assert result["success"] is True, result
+    assert result["network"] == "disabled"
+    assert result["pull"] == "disabled"
+    assert result["image_tag"]
+    # The adapter builds only; it must not start the generated image.
