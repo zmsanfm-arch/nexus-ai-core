@@ -113,6 +113,7 @@ class PlaywrightDockerRunner:
     def __init__(
         self, *, image: str, network: str, proxy_url: str,
         proxy_container: str, allowed_domains: set[str] | list[str], docker_binary: str = "docker",
+        docker_env: dict[str, str] | None = None,
         timeout_seconds: int = 90, memory: str = "1g", cpus: str = "2",
     ):
         if not (re.fullmatch(r".+@sha256:[a-f0-9]{64}", image) or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
@@ -143,6 +144,9 @@ class PlaywrightDockerRunner:
         self.allowed_domains = frozenset(normalized_domains)
         self.image, self.network, self.proxy_url = image, network, proxy_url
         self.proxy_container, self.docker_binary = proxy_container, docker_binary
+        self.docker_env = dict(docker_env or {})
+        if set(self.docker_env) - {"DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"}:
+            raise ValueError("unsupported Docker client environment setting")
         self.timeout_seconds, self.memory, self.cpus = timeout_seconds, memory, cpus
 
     def _docker(self, args, *, timeout=10):
@@ -152,7 +156,7 @@ class PlaywrightDockerRunner:
         result = subprocess.run(
             [binary, *args], capture_output=True, text=True,
             timeout=timeout, check=False,
-            env={"PATH": os.path.dirname(binary)},
+            env={"PATH": os.path.dirname(binary), **self.docker_env},
         )
         if result.returncode:
             raise WebRuntimeError("Docker browser isolation preflight failed.")
@@ -353,15 +357,35 @@ def playwright_runner_from_env():
     network = os.getenv("NEXUS_BROWSER_INTERNAL_NETWORK", "").strip()
     proxy = os.getenv("NEXUS_BROWSER_EGRESS_PROXY_URL", "").strip()
     proxy_container = os.getenv("NEXUS_BROWSER_EGRESS_PROXY_CONTAINER", "").strip()
+    docker_host = os.getenv("NEXUS_BROWSER_DOCKER_HOST", "").strip()
+    docker_cert_path = os.getenv("NEXUS_BROWSER_DOCKER_CERT_PATH", "/run/browser-docker-certs").strip()
+    docker_tls_verify = os.getenv("NEXUS_BROWSER_DOCKER_TLS_VERIFY", "").strip()
     allowed_domains = {
         item.strip().lower().rstrip(".")
         for item in os.getenv("NEXUS_BROWSER_ALLOWED_DOMAINS", "").split(",")
         if item.strip()
     }
-    if not all((image, network, proxy, proxy_container, allowed_domains)):
+    if not all((image, network, proxy, proxy_container, allowed_domains, docker_host)):
         return None
+    parsed_docker = urlsplit(docker_host)
+    if (
+        parsed_docker.scheme != "tcp" or not parsed_docker.hostname
+        or parsed_docker.port != 2376 or parsed_docker.username
+        or parsed_docker.password or parsed_docker.path
+        or docker_tls_verify != "1"
+    ):
+        raise ValueError("browser Docker daemon must use mutually authenticated TLS on port 2376")
+    cert_dir = Path(docker_cert_path)
+    if not all((cert_dir / name).is_file() for name in ("ca.pem", "cert.pem", "key.pem")):
+        raise ValueError("browser Docker client TLS certificate files are missing")
+    docker_env = {
+        "DOCKER_HOST": docker_host,
+        "DOCKER_TLS_VERIFY": "1",
+        "DOCKER_CERT_PATH": str(cert_dir),
+    }
     return PlaywrightDockerRunner(
         image=image, network=network, proxy_url=proxy,
         proxy_container=proxy_container, allowed_domains=allowed_domains,
+        docker_env=docker_env,
         timeout_seconds=int(os.getenv("NEXUS_BROWSER_TIMEOUT_SECONDS", "90")),
     )
