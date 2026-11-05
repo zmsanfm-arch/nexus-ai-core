@@ -1,14 +1,47 @@
-# Web Studio runtime integration — implementation notes
+# Web Studio runtime integration
 
-This increment adds two concrete adapters and the mission evidence path:
+## Implemented components
 
-- `OfflineDockerBuild` packages a validated local website context and sends it to Docker as a tar stream. Builds use `--network=none`, `--pull=false`, `--no-cache`, bounded memory/CPU and a digest-pinned local base-image allowlist. It never starts, pushes or deploys the resulting image.
-- `BrowserTesterHandler` accepts a trusted browser-runner adapter, validates its report and screenshot payloads, and stores each screenshot plus the machine-readable report in the principal-scoped Artifact Store with mission metadata.
-- The mission worker now passes the owning principal to specialist context and stores a bounded final mission report artifact after node execution. Existing per-node artifact persistence remains in place.
-- Central permission policy now declares a distinct permission for each of the 21 Web Studio capabilities. A policy entry is not a grant: manifests remain disabled with empty permission lists, and the worker still requires registered status, a matching capability, a granted permission, and an installed handler.
+- `OfflineDockerBuild` validates website build contexts, rejects symlinks and sensitive paths, requires digest-pinned allowlisted base images, and runs `docker build` with `--network=none`, `--pull=false`, `--no-cache`, and CPU/memory/time/context limits. It never starts, pushes, or deploys the resulting image.
+- Twenty-one Web Studio roles have distinct advisory system policies and a strict `SpecialistResult` contract. The handlers have no tools and cannot execute code, browse, modify files, publish, or deploy. The browser tester role is wired to the real browser adapter only when its runner and artifact store are configured.
+- `BrowserTesterHandler` validates browser reports and screenshots and stores them under the mission principal in the immutable, hash-verified Artifact Store.
+- `PlaywrightDockerRunner` starts a fresh, disposable browser container for each invocation. The browser runs read-only, non-root, with all Linux capabilities dropped, no-new-privileges, PID/memory/CPU limits, and a temporary filesystem.
+- Each browser invocation creates a unique Docker-internal network, attaches only the approved egress proxy, starts the browser container, then disconnects and removes the network. Concurrent browser runs do not share an internal network.
+- `browser_egress_proxy.py` supports HTTPS CONNECT only on port 443, checks an exact domain/subdomain allowlist, resolves DNS once, rejects non-public IP answers, and connects to the validated numeric IP to prevent DNS rebinding between validation and connection. The proxy is intended to be the only container on its dedicated external bridge network and on each ephemeral internal browser network.
+- The mission worker registers the role-specific advisory handlers and the optional Playwright-backed browser tester. It still checks manifest status, capability, central permission, and handler availability before execution. All 21 manifests remain disabled and have no grants.
+- The mission worker stores per-node outputs, browser report/screenshots, and the final mission report with principal-scoped artifact ownership.
+- CI includes Python 3.11/3.12 tests, container/security checks, real Docker offline-build verification, and a real Playwright-in-container smoke/E2E test through the egress proxy.
 
-## Activation boundary
+## Browser runtime deployment contract
 
-This increment does not enable the 21 agents or claim that a production browser runtime is installed. A deployment must inject a reviewed Playwright runner that executes in a disposable browser container with explicit egress restrictions, configure the pinned Docker build image allowlist, and register handlers only after CI and security review. The existing mission worker is sequential; the DAG's dependency order is enforced, but parallel execution is not claimed.
+The browser runtime is deliberately not enabled unless the operator configures all required values. Production worker containers do **not** mount the host Docker socket. The worker uses a dedicated browser Docker daemon over mutually authenticated TLS on TCP 2376; that daemon should run on a separate, disposable browser-execution host/VM with no production application workloads.
 
-Production deployment, DNS/TLS, production secrets and external network access remain outside this adapter. Browser evidence is immutable and principal/mission-scoped; the Artifact Store root must be mounted on persistent storage and included in encrypted backup/restore drills.
+Required worker environment:
+
+- `NEXUS_PLAYWRIGHT_IMAGE`: locally available browser image by immutable digest or image ID, built from `Dockerfile.playwright-runner`.
+- `NEXUS_BROWSER_INTERNAL_NETWORK`: short prefix for per-run ephemeral internal Docker networks.
+- `NEXUS_BROWSER_EGRESS_PROXY_URL`: `http://<proxy-container-name>:3128`.
+- `NEXUS_BROWSER_EGRESS_PROXY_CONTAINER`: exact proxy container name.
+- `NEXUS_BROWSER_ALLOWED_DOMAINS`: comma-separated DNS names approved by the operator.
+- `NEXUS_BROWSER_DOCKER_HOST`: dedicated remote Docker endpoint, e.g. `tcp://browser-host.internal:2376`.
+- `NEXUS_BROWSER_DOCKER_TLS_VERIFY=1` and `NEXUS_BROWSER_DOCKER_CERT_PATH`: directory containing `ca.pem`, `cert.pem`, and `key.pem`; mount it read-only at `/run/browser-docker-certs`. Compose exposes `NEXUS_BROWSER_DOCKER_CERTS_PATH` for the host-side mount source.
+
+On the dedicated browser Docker host:
+
+1. Build `Dockerfile.browser-egress` and `Dockerfile.playwright-runner` with a digest-pinned Python base image. Make both images available locally on that host.
+2. Create one dedicated external bridge network for the egress proxy. Run the egress proxy container only on that network with `NEXUS_EGRESS_PROXY_MODE=allowlist-v1` and `NEXUS_EGRESS_ALLOWED_DOMAINS` configured. Do not publish port 3128 to the host or public Internet.
+3. Do not attach other containers to the proxy's external bridge network. At runtime, the runner verifies that the proxy is the only member of that network and that it is the only container on each ephemeral internal browser network.
+4. The egress proxy must be the only route from the internal browser network to public destinations. It permits only allowlisted HTTPS CONNECT destinations and rejects private, loopback, link-local, multicast, reserved, and IP-literal destinations. The browser network itself is Docker-internal.
+5. Use a dedicated TLS-protected Docker daemon and client certificates. Never mount `/var/run/docker.sock` into the application worker.
+
+The runner refuses to activate if the image, remote TLS Docker endpoint/certificates, internal network prefix, proxy identity, or domain allowlist is missing. Browser runs fail closed if the Docker network topology or proxy image labels/environment do not match the expected policy.
+
+## Activation and acceptance boundaries
+
+- The 21 role manifests remain disabled with empty permissions. Installing a handler is not an authorization grant. Each role must receive a separate review and explicit manifest grant before it can execute through the central worker.
+- The current worker is sequential. The DAG compiler validates dependencies; this increment does not claim parallel execution.
+- The browser E2E test proves the browser -> screenshot/report artifacts -> mission worker -> final report path in CI. It is not a substitute for production-host network validation.
+- CI security scanners and internal tests are not an independent security assessment. A reviewer who did not implement this code must assess the threat model, proxy, Docker daemon boundary, artifact isolation, and failure/recovery paths.
+- PostgreSQL concurrency tests and the encrypted backup/restore drill run in CI. Production load thresholds, real alert delivery, and a production recovery exercise still require the operator's isolated environment and monitoring endpoints.
+- Production secrets/key management, server provisioning, DNS, TLS certificates, and deployment are owned by the repository operator and are not acceptance gates for this code change.
+- Live trading, external execution, image push, and automatic deployment remain disabled.
