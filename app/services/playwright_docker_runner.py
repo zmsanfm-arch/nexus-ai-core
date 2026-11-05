@@ -264,6 +264,12 @@ class PlaywrightDockerRunner:
             raise WebRuntimeError("egress proxy image identity is not verified") from exc
         if labels.get("com.nexus.component") != "browser-egress-proxy" or labels.get("com.nexus.egress-policy") != "allowlist-v1":
             raise WebRuntimeError("egress proxy image is not an approved NEXUS gateway")
+        health = self._docker([
+            "inspect", self.proxy_container,
+            "--format", "{{.State.Health.Status}}",
+        ])
+        if health != "healthy":
+            raise WebRuntimeError("egress proxy healthcheck is not passing")
         return proxy_domains
 
     @staticmethod
