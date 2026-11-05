@@ -14,7 +14,9 @@
 
 ## Browser runtime deployment contract
 
-The browser runtime is deliberately not enabled unless the operator configures all required values. Production worker containers do **not** mount the host Docker socket. The worker uses a dedicated browser Docker daemon over mutually authenticated TLS on TCP 2376; that daemon should run on a separate, disposable browser-execution host/VM with no production application workloads.
+The dedicated `mission-worker` Compose service runs `app.mission_worker_entrypoint` and stores mission artifacts on the persistent `mission_artifacts` volume. It is separate from the generic advisory `worker` service. Start it with the `mission-worker` Compose profile after the operator has prepared the application environment.
+
+The browser runtime is deliberately not enabled unless the operator configures all required values. Production worker containers do **not** mount the host Docker socket. The mission worker uses a dedicated browser Docker daemon over mutually authenticated TLS on TCP 2376; that daemon should run on a separate, disposable browser-execution host/VM with no production application workloads.
 
 Required worker environment:
 
