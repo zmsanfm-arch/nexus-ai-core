@@ -13,3 +13,10 @@ def test_web_studio_is_mounted_and_static_bundle_is_packaged():
     assert (root / "index.html").is_file()
     assert (root / "studio.css").is_file()
     assert (root / "studio.js").is_file()
+
+    html = (root / "index.html").read_text(encoding="utf-8")
+    script = (root / "studio.js").read_text(encoding="utf-8")
+    assert "web_brief_analyst" not in html
+    assert "web_ia_ux_architect" not in html
+    assert 'createMission").disabled=eligible.length===0' in script
+    assert "No enabled advisory agents are available" in script
