@@ -141,7 +141,7 @@ class PlaywrightDockerRunner:
             raise ValueError("invalid browser resource limits")
         normalized_domains = {str(x).lower().rstrip(".") for x in allowed_domains}
         if not normalized_domains or any(
-            !_valid_dns_name(domain)
+            not _valid_dns_name(domain)
             for domain in normalized_domains
         ):
             raise ValueError("browser domain allowlist is invalid")
@@ -275,7 +275,7 @@ class PlaywrightDockerRunner:
         except ValueError as exc:
             raise WebRuntimeError("browser target URL is malformed") from exc
         host = (parsed.hostname or "").lower().rstrip(".")
-        if parsed.scheme != "https" or not host or parsed.username or parsed.password or port not in (None, 443):
+        if parsed.scheme != "https" or not host or not _valid_dns_name(host) or parsed.username or parsed.password or port not in (None, 443):
             raise WebRuntimeError("browser target must be HTTPS on port 443 without credentials")
         try:
             ipaddress.ip_address(host)
@@ -285,7 +285,7 @@ class PlaywrightDockerRunner:
         if not isinstance(allowed_domains, list) or not allowed_domains:
             raise WebRuntimeError("trusted browser domain allowlist is required")
         normalized = {str(x).lower().rstrip(".") for x in allowed_domains}
-        if any(not re.fullmatch(r"[a-z0-9.-]{1,253}", d) or ".." in d for d in normalized):
+        if any(not _valid_dns_name(d) for d in normalized):
             raise WebRuntimeError("invalid browser domain allowlist")
         if not any(host == d or host.endswith("." + d) for d in normalized):
             raise WebRuntimeError("browser target is outside the approved domain allowlist")
