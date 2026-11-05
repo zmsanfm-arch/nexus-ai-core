@@ -194,6 +194,9 @@ jobs:
           docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.playwright-runner -t nexus-playwright-runner:ci .
           docker network create nexus-browser-egress
           docker run -d --name nexus-egress-proxy --network nexus-browser-egress \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 64 --memory 128m --cpus 0.5 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
             -e NEXUS_EGRESS_PROXY_MODE=allowlist-v1 \
             -e NEXUS_EGRESS_ALLOWED_DOMAINS=example.com \
             nexus-browser-egress:ci
