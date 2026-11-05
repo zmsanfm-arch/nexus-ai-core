@@ -116,3 +116,32 @@ def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypat
     assert "--security-opt" in command and "no-new-privileges:true" in command
     assert "--pids-limit" in command and "128" in command
     assert kwargs["timeout"] == 120
+
+
+def test_real_playwright_container_uses_egress_gateway():
+    import os
+    image = os.getenv("NEXUS_TEST_PLAYWRIGHT_IMAGE")
+    network = os.getenv("NEXUS_TEST_BROWSER_NETWORK")
+    proxy_url = os.getenv("NEXUS_TEST_BROWSER_PROXY_URL")
+    proxy_container = os.getenv("NEXUS_TEST_BROWSER_PROXY_CONTAINER")
+    if not all((image, network, proxy_url, proxy_container)):
+        pytest.skip("real isolated Playwright Docker integration is not configured")
+    runner = PlaywrightDockerRunner(
+        image=image, network=network, proxy_url=proxy_url,
+        proxy_container=proxy_container, timeout_seconds=90,
+    )
+    request = SpecialistInput(
+        task_id="browser-ci", task_type="web.browser.test", request="CI browser smoke test",
+        context={
+            "browser_target_url": "https://example.com",
+            "browser_policy": {
+                "allowed_domains": ["example.com"],
+                "egress_proxy_id": proxy_container,
+            },
+        },
+    )
+    result = runner(request)
+    assert result["report"]["status"] == "completed"
+    assert result["report"]["checks"]["navigation"] is True
+    assert result["screenshots"]
+    assert result["screenshots"][0]["content"].startswith(b"\\x89PNG")
