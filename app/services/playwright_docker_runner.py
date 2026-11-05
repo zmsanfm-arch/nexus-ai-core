@@ -282,7 +282,7 @@ class PlaywrightDockerRunner:
         context = request.context or {}
         target = context.get("browser_target_url")
         if not target:
-            match = re.search(r"https://[A-Za-z0-9.-]+(?::443)?(?:/[^\\s]*)?", request.request)
+            match = re.search(r"https://[A-Za-z0-9.-]+(?::443)?(?:/[^\s]*)?", request.request)
             target = match.group(0).rstrip(".,;)]}") if match else None
         allowed = self._validate_target(target, sorted(self.allowed_domains))
         network_name = f"{self.network}-{uuid4().hex[:12]}"
