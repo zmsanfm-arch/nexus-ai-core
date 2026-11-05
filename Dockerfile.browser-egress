@@ -5,6 +5,7 @@ ARG PYTHON_BASE_IMAGE
 RUN case "$PYTHON_BASE_IMAGE" in *@sha256:*) ;; *) echo "PYTHON_BASE_IMAGE must be digest-pinned" >&2; exit 1 ;; esac
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /opt/nexus
+LABEL com.nexus.component="browser-egress-proxy" com.nexus.egress-policy="allowlist-v1"
 COPY app/services/browser_egress_proxy.py /opt/nexus/browser_egress_proxy.py
 USER 65532:65532
 EXPOSE 3128
