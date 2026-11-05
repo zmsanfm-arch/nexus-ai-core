@@ -122,3 +122,36 @@ def test_worker_restart_resumes_after_durable_node_checkpoint(tmp_path):
         assert states["analysis"]["status"] == "completed"
     finally:
         restarted_store.close()
+
+
+def test_lease_heartbeat_renews_during_slow_handler():
+    import threading
+    import time
+    from app.services.mission_run_worker import _LeaseHeartbeat
+
+    class LeaseRepo:
+        def __init__(self):
+            self.calls = []
+        def renew_lease(self, run_id, worker_id, lease_seconds):
+            self.calls.append((run_id, worker_id, lease_seconds))
+            return True
+
+    repository = LeaseRepo()
+    with _LeaseHeartbeat(repository, "run-1", "worker-1", 3) as heartbeat:
+        time.sleep(1.15)
+        assert not heartbeat.lost.is_set()
+    assert repository.calls
+    assert repository.calls[0] == ("run-1", "worker-1", 3)
+
+
+def test_lease_heartbeat_stops_work_when_ownership_is_lost():
+    import time
+    from app.services.mission_run_worker import _LeaseHeartbeat
+
+    class LeaseRepo:
+        def renew_lease(self, *_args):
+            return False
+
+    with _LeaseHeartbeat(LeaseRepo(), "run-2", "worker-2", 3) as heartbeat:
+        assert heartbeat.lost.wait(timeout=2)
+    assert heartbeat.lost.is_set()

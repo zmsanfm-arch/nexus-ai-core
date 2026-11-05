@@ -57,3 +57,13 @@ def test_delete_removes_only_owned_artifact(tmp_path):
     store.delete("principal-a", item["artifact_id"])
     with pytest.raises(ArtifactNotFound):
         store.get("principal-a", item["artifact_id"])
+
+
+def test_artifact_survives_store_recreation(tmp_path):
+    root = tmp_path / "persistent-volume"
+    first = LocalArtifactStore(root)
+    item = first.put("principal-a", b"recoverable report", mission_id="mission_restore")
+    second = LocalArtifactStore(root)
+    metadata, content = second.get("principal-a", item["artifact_id"])
+    assert content == b"recoverable report"
+    assert metadata["mission_id"] == "mission_restore"
