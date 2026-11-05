@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -371,7 +372,7 @@ def playwright_runner_from_env():
     if (
         parsed_docker.scheme != "tcp" or not parsed_docker.hostname
         or parsed_docker.port != 2376 or parsed_docker.username
-        or parsed_docker.password or parsed_docker.path
+        or parsed_docker.password or parsed_docker.path or parsed_docker.query or parsed_docker.fragment
         or docker_tls_verify != "1"
     ):
         raise ValueError("browser Docker daemon must use mutually authenticated TLS on port 2376")
