@@ -26,7 +26,7 @@ Required worker environment:
 - `NEXUS_BROWSER_EGRESS_PROXY_CONTAINER`: exact proxy container name.
 - `NEXUS_BROWSER_ALLOWED_DOMAINS`: comma-separated DNS names approved by the operator.
 - `NEXUS_BROWSER_DOCKER_HOST`: dedicated remote Docker endpoint, e.g. `tcp://browser-host.internal:2376`.
-- `NEXUS_BROWSER_DOCKER_TLS_VERIFY=1` and `NEXUS_BROWSER_DOCKER_CERT_PATH`: directory containing `ca.pem`, `cert.pem`, and `key.pem`; mount it read-only at `/run/browser-docker-certs`. Compose exposes `NEXUS_BROWSER_DOCKER_CERTS_PATH` for the host-side mount source.
+- `NEXUS_BROWSER_DOCKER_TLS_VERIFY=1` and `NEXUS_BROWSER_DOCKER_CERT_PATH`: directory containing `ca.pem`, `cert.pem`, and `key.pem`; mount it read-only at `/run/browser-docker-certs`. Compose exposes `NEXUS_BROWSER_DOCKER_CERTS_PATH` for the host-side mount source. The files must be readable by the non-root `nexus` container user through a dedicated group; do not make private keys world-readable.
 
 On the dedicated browser Docker host:
 
