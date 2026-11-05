@@ -154,7 +154,7 @@ def test_real_playwright_container_uses_egress_gateway():
     assert result["report"]["status"] == "completed"
     assert result["report"]["checks"]["navigation"] is True
     assert result["screenshots"]
-    assert result["screenshots"][0]["content"].startswith(b"\\x89PNG")
+    assert result["screenshots"][0]["content"].startswith(b"\x89PNG")
 
 
 def test_playwright_runner_from_env_requires_mutual_tls_and_client_certificates(monkeypatch, tmp_path):
