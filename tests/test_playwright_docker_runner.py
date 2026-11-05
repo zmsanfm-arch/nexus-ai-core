@@ -42,6 +42,8 @@ def test_playwright_target_must_be_https_and_allowlisted():
         runner._validate_target("https://example.net", ["example.com"])
     with pytest.raises(WebRuntimeError, match="IP-literal"):
         runner._validate_target("https://127.0.0.1", ["127.0.0.1"])
+    with pytest.raises(WebRuntimeError, match="port 443"):
+        runner._validate_target("https://example.com:444", ["example.com"])
 
 
 def test_playwright_runner_fails_closed_without_trusted_policy():
