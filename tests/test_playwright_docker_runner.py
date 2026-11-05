@@ -66,6 +66,7 @@ def test_playwright_runner_verifies_internal_proxy_only_network(monkeypatch):
         json.dumps({"proxy-id": {"Name": "nexus-egress-proxy"}}),
         json.dumps(["NEXUS_EGRESS_PROXY_MODE=allowlist-v1", "NEXUS_EGRESS_ALLOWED_DOMAINS=example.com,example.net"]),
         json.dumps({"com.nexus.component": "browser-egress-proxy", "com.nexus.egress-policy": "allowlist-v1"}),
+        "healthy",
     ])
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: next(responses))
     runner._verify_network("nexus-browser-internal-abc")
