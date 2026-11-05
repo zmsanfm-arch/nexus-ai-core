@@ -1,0 +1,11 @@
+# Build with --build-arg PYTHON_BASE_IMAGE=python:3.12-slim@sha256:<verified-digest>
+ARG PYTHON_BASE_IMAGE
+FROM ${PYTHON_BASE_IMAGE}
+ARG PYTHON_BASE_IMAGE
+RUN case "$PYTHON_BASE_IMAGE" in *@sha256:*) ;; *) echo "PYTHON_BASE_IMAGE must be digest-pinned" >&2; exit 1 ;; esac
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /opt/nexus
+COPY app/services/browser_egress_proxy.py /opt/nexus/browser_egress_proxy.py
+USER 65532:65532
+EXPOSE 3128
+ENTRYPOINT ["python", "/opt/nexus/browser_egress_proxy.py"]
