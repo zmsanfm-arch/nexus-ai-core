@@ -111,6 +111,12 @@ class EgressProxy:
                     raise ValueError("invalid CONNECT authority")
                 raw_host, raw_port = authority.rsplit(":", 1)
                 host = raw_host.encode("idna").decode("ascii").lower().rstrip(".")
+                try:
+                    ipaddress.ip_address(host)
+                except ValueError:
+                    pass
+                else:
+                    raise ValueError("IP-literal destinations are forbidden")
                 if raw_port != "443" or not host_allowed(host, self.allowed_domains):
                     raise ValueError("destination is not allowlisted")
                 if not re.fullmatch(r"[a-z0-9.-]{1,253}", host) or ".." in host:
