@@ -35,6 +35,12 @@ def load_allowlist(value: str) -> frozenset[str]:
         domain = item.strip().lower().rstrip(".")
         if not _valid_domain(domain):
             raise ValueError("NEXUS_EGRESS_ALLOWED_DOMAINS contains an invalid domain")
+        try:
+            ipaddress.ip_address(domain)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("NEXUS_EGRESS_ALLOWED_DOMAINS must contain DNS names, not IP literals")
         domains.add(domain)
     if not domains:
         raise ValueError("NEXUS_EGRESS_ALLOWED_DOMAINS must not be empty")
