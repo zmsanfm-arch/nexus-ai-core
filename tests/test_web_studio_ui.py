@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi.routing import Mount
+from starlette.routing import Mount
 
 from app.main import app
 
