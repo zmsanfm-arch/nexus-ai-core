@@ -167,7 +167,9 @@ jobs:
           NEXUS_TEST_BROWSER_PROXY_URL=http://nexus-egress-proxy:3128 \
           NEXUS_TEST_BROWSER_PROXY_CONTAINER=nexus-egress-proxy \
           NEXUS_TEST_BROWSER_ALLOWED_DOMAINS=example.com \
-            pytest -q tests/test_playwright_docker_runner.py::test_real_playwright_container_uses_egress_gateway
+            pytest -q \
+              tests/test_playwright_docker_runner.py::test_real_playwright_container_uses_egress_gateway \
+              tests/test_web_studio_e2e.py::test_real_browser_mission_persists_principal_scoped_evidence
 
   security:
     runs-on: ubuntu-latest
