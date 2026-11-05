@@ -114,7 +114,7 @@ class PlaywrightDockerRunner:
         proxy_container: str, docker_binary: str = "docker",
         timeout_seconds: int = 90, memory: str = "1g", cpus: str = "2",
     ):
-        if not re.fullmatch(r".+@sha256:[a-f0-9]{64}", image):
+        if not (re.fullmatch(r".+@sha256:[a-f0-9]{64}", image) or re.fullmatch(r"sha256:[a-f0-9]{64}", image)):
             raise ValueError("Playwright image must be digest-pinned")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,62}", network):
             raise ValueError("invalid browser network name")
@@ -246,6 +246,7 @@ class PlaywrightDockerRunner:
             "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
             "--user", "1000:1000",
             "--env", "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright",
+            "--env", "HOME=/tmp",
             "--entrypoint", "python",
             self.image, "-c", _BROWSER_SCRIPT,
         ]
