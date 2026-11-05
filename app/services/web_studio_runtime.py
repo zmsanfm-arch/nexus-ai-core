@@ -98,7 +98,7 @@ class OfflineDockerBuild:
                 docker, "build", "--network=none", "--pull=false", "--no-cache",
                 "--memory", self.memory, "--cpu-period", "100000",
                 "--cpu-quota", str(int(float(self.cpus) * 100000)),
-                "--tag", tag, "--file", "Dockerfile", "-",
+                "--tag", tag, "-",
             ]
             try:
                 result = subprocess.run(command, input=archive.read_bytes(), capture_output=True, text=False,
