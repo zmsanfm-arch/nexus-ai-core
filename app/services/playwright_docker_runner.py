@@ -159,8 +159,19 @@ class PlaywrightDockerRunner:
             networks = json.loads(raw)
         except (TypeError, ValueError) as exc:
             raise WebRuntimeError("egress proxy network membership is invalid") from exc
-        if self.network not in networks or len(networks) < 2:
-            raise WebRuntimeError("egress proxy must join the internal browser network and a separate egress network")
+        if self.network not in networks or len(networks) != 2:
+            raise WebRuntimeError("egress proxy must join only the internal browser network and one egress network")
+        raw_members = self._docker([
+            "network", "inspect", self.network,
+            "--format", "{{json .Containers}}",
+        ])
+        try:
+            members = json.loads(raw_members or "{}")
+            member_names = {item.get("Name") for item in members.values()}
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise WebRuntimeError("browser network membership is invalid") from exc
+        if member_names != {self.proxy_container}:
+            raise WebRuntimeError("only the approved egress proxy may join the browser network")
 
     @staticmethod
     def _validate_target(target, allowed_domains):
