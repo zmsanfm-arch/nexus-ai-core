@@ -159,7 +159,7 @@ jobs:
           POSTGRES_PASSWORD=ci-only-placeholder
           NEXUS_DOMAIN=example.com
           ENV
-          docker compose -f docker-compose.production.yml config --quiet
+          docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
           rm -f .env.production
       - name: Build container
         run: docker build --tag nexus-ai-core:ci .
