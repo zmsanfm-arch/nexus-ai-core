@@ -161,6 +161,11 @@ class PlaywrightDockerRunner:
             raise WebRuntimeError("egress proxy network membership is invalid") from exc
         if self.network not in networks or len(networks) != 2:
             raise WebRuntimeError("egress proxy must join only the internal browser network and one egress network")
+        external_network = next(name for name in networks if name != self.network)
+        if self._docker([
+            "network", "inspect", external_network, "--format", "{{.Internal}}",
+        ]).lower() != "false":
+            raise WebRuntimeError("egress proxy outbound network must not be internal")
         raw_members = self._docker([
             "network", "inspect", self.network,
             "--format", "{{json .Containers}}",
@@ -190,6 +195,16 @@ class PlaywrightDockerRunner:
                 raise ValueError("proxy allowlist missing")
         except (TypeError, ValueError) as exc:
             raise WebRuntimeError("egress proxy allowlist configuration is not verified") from exc
+        raw_labels = self._docker([
+            "inspect", self.proxy_container,
+            "--format", "{{json .Config.Labels}}",
+        ])
+        try:
+            labels = json.loads(raw_labels)
+        except (TypeError, ValueError) as exc:
+            raise WebRuntimeError("egress proxy image identity is not verified") from exc
+        if labels.get("com.nexus.component") != "browser-egress-proxy" or labels.get("com.nexus.egress-policy") != "allowlist-v1":
+            raise WebRuntimeError("egress proxy image is not an approved NEXUS gateway")
         return proxy_domains
 
     @staticmethod
