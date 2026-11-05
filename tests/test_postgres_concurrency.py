@@ -88,7 +88,7 @@ def test_postgres_concurrent_enqueue_and_claim_stress():
         assert len(claimed_ids) == len(set(claimed_ids)) == len(task_ids)
         assert set(claimed_ids) == set(task_ids)
         assert store.queue_summary()["leased"] >= len(task_ids)
-        assert "checked out" not in store.engine.pool.status().lower()
+        assert store.engine.pool.checkedout() == 0
     finally:
         with store.sessions.begin() as session:
             session.query(TaskQueueRecord).filter(
