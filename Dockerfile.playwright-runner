@@ -1,0 +1,13 @@
+# Build with a verified immutable base image digest.
+ARG PYTHON_BASE_IMAGE
+FROM ${PYTHON_BASE_IMAGE}
+ARG PYTHON_BASE_IMAGE
+RUN case "$PYTHON_BASE_IMAGE" in *@sha256:*) ;; *) echo "PYTHON_BASE_IMAGE must be digest-pinned" >&2; exit 1 ;; esac
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN python -m pip install --no-cache-dir playwright==1.55.0 \
+    && python -m playwright install --with-deps chromium \
+    && useradd --uid 1000 --create-home --shell /usr/sbin/nologin pwuser \
+    && mkdir -p /ms-playwright \
+    && chown -R 1000:1000 /ms-playwright
+USER 1000:1000
+WORKDIR /tmp

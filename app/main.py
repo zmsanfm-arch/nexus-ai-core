@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceCreate
 from app.services.mission_contract import MissionDefinition, MissionContractError, compile_mission
 from app.services.mission_repository import MissionAlreadyExists, MissionRepository
@@ -40,6 +41,9 @@ app = FastAPI(
     description="Autonomous multi-agent system foundation",
     lifespan=lifespan,
 )
+
+# Serve the first-party, same-origin Web Studio mission-control interface.
+app.mount("/studio", StaticFiles(directory="web_studio", html=True), name="web-studio")
 
 principal_rate_limiter = PrincipalRateLimiter()
 

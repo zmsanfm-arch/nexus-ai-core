@@ -4,6 +4,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+ARG INSTALL_DOCKER_CLI=false
+RUN if [ "$INSTALL_DOCKER_CLI" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends docker.io \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 WORKDIR /app
 RUN addgroup --system nexus && adduser --system --ingroup nexus --home /app nexus
 COPY requirements.txt ./
@@ -12,10 +18,11 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
+COPY web_studio ./web_studio
 COPY scripts ./scripts
 COPY agents ./agents
 COPY docs ./docs
-RUN mkdir -p /app/data && chown -R nexus:nexus /app
+RUN mkdir -p /app/data/artifacts && chown -R nexus:nexus /app
 USER nexus
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

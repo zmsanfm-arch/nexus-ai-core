@@ -53,3 +53,48 @@ def test_concurrent_postgres_workers_claim_each_task_at_most_once():
                 TaskRecord.id.in_(task_ids)
             ).delete(synchronize_session=False)
         store.close()
+
+
+def test_postgres_concurrent_enqueue_and_claim_stress():
+    """Exercise the PostgreSQL pool and queue with concurrent producers/consumers."""
+    store = SQLAlchemyStore(DATABASE_URL)
+    task_ids = [str(uuid4()) for _ in range(512)]
+    worker_prefix = f"stress-{uuid4()}"
+    batches = [task_ids[index:index + 16] for index in range(0, len(task_ids), 16)]
+    try:
+        def enqueue_batch(batch):
+            for task_id in batch:
+                store.enqueue_task({
+                    "id": task_id,
+                    "objective": "postgres concurrency stress",
+                    "status": "queued",
+                })
+
+        with ThreadPoolExecutor(max_workers=32) as pool:
+            list(pool.map(enqueue_batch, batches))
+
+        def drain(worker_number: int):
+            worker_id = f"{worker_prefix}-{worker_number}"
+            claimed = []
+            while True:
+                lease = store.claim_next_task(worker_id, lease_seconds=60)
+                if lease is None:
+                    return claimed
+                claimed.append(lease["task_id"])
+
+        with ThreadPoolExecutor(max_workers=32) as pool:
+            batches = list(pool.map(drain, range(32)))
+        claimed_ids = [task_id for batch in batches for task_id in batch]
+        assert len(claimed_ids) == len(set(claimed_ids)) == len(task_ids)
+        assert set(claimed_ids) == set(task_ids)
+        assert store.queue_summary()["leased"] >= len(task_ids)
+        assert store.engine.pool.checkedout() == 0
+    finally:
+        with store.sessions.begin() as session:
+            session.query(TaskQueueRecord).filter(
+                TaskQueueRecord.task_id.in_(task_ids)
+            ).delete(synchronize_session=False)
+            session.query(TaskRecord).filter(
+                TaskRecord.id.in_(task_ids)
+            ).delete(synchronize_session=False)
+        store.close()

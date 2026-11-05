@@ -45,7 +45,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
-      - name: Run tests
+      - name: Prepare local digest-pinned image for Docker sandbox integration test
+        run: |
+          set -euo pipefail
+          docker pull busybox:1.36.1
+          image="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' busybox:1.36.1 | head -n1)"
+          case "$image" in
+            *@sha256:*) ;;
+            *) echo "Could not resolve a digest-pinned local BusyBox image" >&2; exit 1 ;;
+          esac
+          echo "NEXUS_TEST_DOCKER_BASE_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Run tests including real offline Docker build
         run: pytest -q
       - name: Install encrypted-backup drill utilities
         run: |
@@ -94,15 +104,70 @@ jobs:
             NEXUS_RESTORE_CONFIRM=YES bash scripts/restore_postgres_drill.sh
           restored="$(psql "${restore_url}" -v ON_ERROR_STOP=1 -Atc "SELECT marker FROM restore_drill_check WHERE id = 1")"
           test "${restored}" = "restore-ok"
+      - name: Run encrypted mission artifact-volume backup and restore drill
+        run: |
+          set -euo pipefail
+          identity_file="${RUNNER_TEMP}/nexus-artifacts-age-identity.txt"
+          artifact_root="${RUNNER_TEMP}/nexus-artifact-source"
+          backup_dir="${RUNNER_TEMP}/nexus-artifact-backups"
+          mkdir -p "${artifact_root}" "${backup_dir}"
+          age-keygen -o "${identity_file}"
+          chmod 600 "${identity_file}"
+          recipient="$(age-keygen -y "${identity_file}")"
+          artifact_id="$(NEXUS_ARTIFACT_ROOT="${artifact_root}" python - <<'PY'
+          import os
+          from app.services.artifact_store import LocalArtifactStore
+          store = LocalArtifactStore(os.environ["NEXUS_ARTIFACT_ROOT"])
+          item = store.put(
+              "ci-restore-principal",
+              b"mission-artifact-restore-proof",
+              mission_id="ci_restore",
+              media_type="text/plain",
+              metadata={"kind": "restore_drill"},
+          )
+          print(item["artifact_id"])
+          PY
+          )"
+          backup_file="$(NEXUS_ARTIFACT_ROOT="${artifact_root}" AGE_RECIPIENT="${recipient}" BACKUP_DIR="${backup_dir}" bash scripts/backup_mission_artifacts_encrypted.sh)"
+          test -f "${backup_file}"
+          rm -rf "${artifact_root}"
+          mkdir -p "${artifact_root}"
+          BACKUP_FILE="${backup_file}" AGE_IDENTITY_FILE="${identity_file}" \
+            NEXUS_RESTORE_ARTIFACT_ROOT="${artifact_root}" NEXUS_RESTORE_CONFIRM=YES \
+            bash scripts/restore_mission_artifacts_drill.sh
+          NEXUS_ARTIFACT_ROOT="${artifact_root}" RESTORED_ARTIFACT_ID="${artifact_id}" python - <<'PY'
+          import os
+          from app.services.artifact_store import LocalArtifactStore
+          store = LocalArtifactStore(os.environ["NEXUS_ARTIFACT_ROOT"])
+          metadata, content = store.get("ci-restore-principal", os.environ["RESTORED_ARTIFACT_ID"])
+          assert content == b"mission-artifact-restore-proof"
+          assert metadata["metadata"]["kind"] == "restore_drill"
+          PY
 
   container:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Validate production Compose model
+        run: |
+          set -euo pipefail
+          cat > .env.production <<'ENV'
+          POSTGRES_DB=nexus_ci
+          POSTGRES_USER=nexus_ci
+          POSTGRES_PASSWORD=ci-only-placeholder
+          NEXUS_DOMAIN=example.com
+          ENV
+          docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
+          rm -f .env.production
       - name: Build container
         run: docker build --tag nexus-ai-core:ci .
+      - name: Build dedicated mission worker image with remote Docker CLI
+        run: |
+          set -euo pipefail
+          docker build --build-arg INSTALL_DOCKER_CLI=true --tag nexus-mission-worker:ci .
+          docker run --rm --entrypoint docker nexus-mission-worker:ci --version
       - name: Smoke-test container startup and health
         run: |
           set -eu
@@ -122,6 +187,56 @@ jobs:
           done
           docker logs nexus-ai-core-smoke
           exit 1
+      - name: Build and exercise isolated Playwright and egress proxy containers
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          docker pull python:3.12-slim
+          base_image="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' python:3.12-slim | grep -m1 '@sha256:')"
+          test -n "$base_image"
+          docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.browser-egress -t nexus-browser-egress:ci .
+          docker build --build-arg PYTHON_BASE_IMAGE="$base_image" -f Dockerfile.playwright-runner -t nexus-playwright-runner:ci .
+          docker network create nexus-browser-egress
+          docker network create --internal nexus-browser-internal
+          cleanup() {
+            docker rm -f nexus-egress-proxy >/dev/null 2>&1 || true
+            docker network rm nexus-browser-internal >/dev/null 2>&1 || true
+            docker network rm nexus-browser-egress >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name nexus-egress-proxy --network nexus-browser-egress \
+            --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+            --pids-limit 64 --memory 128m --cpus 0.5 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            -e NEXUS_EGRESS_PROXY_MODE=allowlist-v1 \
+            -e NEXUS_EGRESS_ALLOWED_DOMAINS=example.com \
+            nexus-browser-egress:ci
+          docker network connect nexus-browser-internal nexus-egress-proxy
+          for attempt in $(seq 1 30); do
+            if docker logs nexus-egress-proxy 2>&1 | grep -q "egress proxy ready"; then
+              break
+            fi
+            sleep 1
+          done
+          docker logs nexus-egress-proxy 2>&1 | grep -q "egress proxy ready"
+          for attempt in $(seq 1 30); do
+            proxy_health="$(docker inspect --format '{{.State.Health.Status}}' nexus-egress-proxy)"
+            if [ "$proxy_health" = "healthy" ]; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' nexus-egress-proxy)" = "healthy"
+          browser_image="$(docker image inspect --format '{{.Id}}' nexus-playwright-runner:ci)"
+          NEXUS_TEST_PLAYWRIGHT_IMAGE="$browser_image" \
+          NEXUS_TEST_BROWSER_NETWORK=nexus-browser-internal \
+          NEXUS_TEST_BROWSER_PROXY_URL=http://nexus-egress-proxy:3128 \
+          NEXUS_TEST_BROWSER_PROXY_CONTAINER=nexus-egress-proxy \
+          NEXUS_TEST_BROWSER_ALLOWED_DOMAINS=example.com \
+            pytest -q \
+              tests/test_playwright_docker_runner.py::test_real_playwright_container_uses_egress_gateway \
+              tests/test_web_studio_e2e.py::test_real_browser_mission_persists_principal_scoped_evidence
 
   security:
     runs-on: ubuntu-latest

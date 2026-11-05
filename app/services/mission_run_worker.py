@@ -140,6 +140,7 @@ class MissionRunWorker:
                         context={
                             "mission_id": mission.mission_id, "mission_name": mission.name,
                             "node_id": planned.node_id,
+                            "principal_id": run["principal_id"],
                             "dependency_outputs": {dep: outputs[dep] for dep in planned.dependencies},
                         },
                         correlation_id=f"{run_id}:{planned.node_id}",
@@ -200,6 +201,25 @@ class MissionRunWorker:
                                 "block": "blocked"}[audit.verdict]
                 self._audit("mission_final_audit_completed", run_id,
                             verdict=audit.verdict, findings_count=len(audit.findings))
+            if self.artifact_store is not None:
+                final_payload = json.dumps({
+                    "mission_id": mission.mission_id,
+                    "run_id": run_id,
+                    "objective": mission.objective,
+                    "status": final_status,
+                    "node_outputs": outputs,
+                }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                if len(final_payload) <= 2_000_000:
+                    final_artifact = self.artifact_store.put(
+                        run["principal_id"], final_payload,
+                        media_type="application/json", mission_id=mission.mission_id,
+                        metadata={"run_id": run_id, "kind": "mission_final_report"},
+                    )
+                    self._audit("mission_final_report_stored", run_id,
+                                artifact_id=final_artifact["artifact_id"])
+                else:
+                    self._audit("mission_final_report_omitted", run_id,
+                                reason="report_size_limit_exceeded")
             self.repository.finish(run_id, self.worker_id, final_status)
             self._audit("mission_run_finished", run_id, status=final_status)
         except Exception as exc:
