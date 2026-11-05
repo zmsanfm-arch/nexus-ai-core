@@ -91,7 +91,7 @@ class OfflineDockerBuild:
         tag = "nexus-web-build:" + hashlib.sha256(os.urandom(32)).hexdigest()[:20]
         with tempfile.TemporaryDirectory(prefix="nexus-web-context-") as temp:
             archive = Path(temp) / "context.tar"
-            with tarfile.open(archive, "w") as tar:
+            with tarfile.open(archive, "w", format=tarfile.GNU_FORMAT) as tar:
                 for item in files:
                     tar.add(item, arcname=item.relative_to(root).as_posix(), recursive=False)
             command = [
