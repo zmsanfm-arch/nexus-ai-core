@@ -25,10 +25,9 @@ def test_builds_complete_bounded_21_role_website_mission():
     assert len(mission.nodes) == 21
     assert mission.max_total_attempts == 21
     assert plan.max_attempts == 21
-    assert "web_quality_auditor" not in {
-        node.agent_id for node in mission.nodes
-        if node.node_id == "quality_auditor"
-    }  # node ids and agent ids remain distinct
+    auditor = next(node for node in mission.nodes if node.node_id == "quality_auditor")
+    assert auditor.agent_id == "web_quality_auditor"
+    assert auditor.dependencies == ("release_engineer",)
 
 
 def test_design_and_quality_work_are_dependency_gated():
