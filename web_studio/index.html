@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>NEXUS AI CORE · Web Studio</title>
+<link rel="stylesheet" href="/studio/studio.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/studio/">NEXUS<span>AI CORE</span></a><div class="top-actions"><span id="connection" class="status">Disconnected</span><button id="authToggle" class="quiet">API credentials</button></div></header>
+<main>
+<section class="intro"><div class="eyebrow">MISSION CONTROL / WEB STUDIO</div><h1>Build with a governed agent system.</h1><p>Create a declarative mission, validate its registered advisory agents, enqueue a run and inspect its state. Execution remains subject to central policy and worker availability.</p></section>
+<section class="grid">
+<article class="panel"><div class="panel-head"><div><div class="eyebrow">01 / CONNECTION</div><h2>Connect to Core</h2></div></div><label>API base URL<input id="apiBase" value="" placeholder="Same origin by default"></label><label>API bearer token<input id="apiToken" type="password" autocomplete="off" placeholder="NEXUS_API_TOKEN"></label><div class="actions"><button id="connect">Connect</button><button id="disconnect" class="quiet">Disconnect</button></div><p class="hint">Credentials are held in this browser tab only and are not written to persistent storage.</p></article>
+<article class="panel"><div class="panel-head"><div><div class="eyebrow">02 / REGISTRY</div><h2>Available agents</h2></div><button id="refreshAgents" class="quiet">Refresh</button></div><div id="agents" class="agent-list"><p class="muted">Connect to load the registry.</p></div></article>
+</section>
+<section class="panel mission-panel"><div class="panel-head"><div><div class="eyebrow">03 / MISSION DESIGNER</div><h2>Define a mission</h2></div><span class="tag">Advisory · governed</span></div>
+<div class="form-grid"><label>Mission ID<input id="missionId" maxlength="64" value="web_studio_project"></label><label>Mission name<input id="missionName" maxlength="120" value="Web Studio project"></label></div>
+<label>Objective<textarea id="objective" rows="3" maxlength="4000" placeholder="Describe the outcome and constraints"></textarea></label>
+<label>Mission nodes · JSON<textarea id="nodes" rows="8" spellcheck="false">[
+  {"node_id":"brief_analysis","agent_id":"web_brief_analyst","capability":"web.brief_analysis","dependencies":[],"max_attempts":1},
+  {"node_id":"ux_architecture","agent_id":"web_ia_ux_architect","capability":"web.information_architecture","dependencies":["brief_analysis"],"max_attempts":1}
+]</textarea></label>
+<div class="actions"><button id="createMission">Validate &amp; save mission</button><button id="enqueueRun" disabled>Enqueue mission run</button></div><div id="missionResult" class="result muted">No mission selected.</div>
+</section>
+<section class="grid">
+<article class="panel"><div class="panel-head"><div><div class="eyebrow">04 / RUN STATUS</div><h2>Mission run</h2></div><button id="refreshRun" class="quiet" disabled>Refresh</button></div><label>Mission ID<input id="runMissionId" placeholder="Mission ID"></label><label>Run ID<input id="runId" placeholder="Run ID"></label><div id="runResult" class="result muted">No run selected.</div></article>
+<article class="panel"><div class="panel-head"><div><div class="eyebrow">05 / SYSTEM</div><h2>Health &amp; readiness</h2></div><button id="refreshHealth" class="quiet">Check</button></div><div id="health" class="result muted">Not checked.</div><p class="hint">Health and readiness are separate checks. A healthy API does not imply that the dedicated mission worker or remote browser host is online.</p></article>
+</section>
+<footer> NEXUS AI CORE · Web Studio · No external execution, publishing, trading or deployment controls are exposed here.</footer>
+</main>
+<dialog id="authDialog"><form method="dialog"><h2>API credentials</h2><p>Set a bearer token for this tab. Requests are sent only to the configured API origin.</p><button class="quiet">Close</button></form></dialog>
+<script src="/studio/studio.js" defer></script>
+</body></html>
