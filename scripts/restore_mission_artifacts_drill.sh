@@ -14,10 +14,12 @@ if [[ ! -f "$BACKUP_FILE" || -L "$BACKUP_FILE" || ! -f "$AGE_IDENTITY_FILE" || -
   echo "Backup and identity must be regular, non-symlink files." >&2
   exit 2
 fi
-if [[ ! -f "$BACKUP_FILE.sha256" ]]; then
+if [[ ! -f "$BACKUP_FILE.sha256" || -L "$BACKUP_FILE.sha256" ]]; then
   echo "Artifact backup checksum file is missing." >&2
   exit 2
 fi
+command -v age >/dev/null || { echo "age is required." >&2; exit 2; }
+command -v sha256sum >/dev/null || { echo "sha256sum is required." >&2; exit 2; }
 (cd "$(dirname "$BACKUP_FILE")" && sha256sum -c "$(basename "$BACKUP_FILE").sha256")
 
 target="$NEXUS_RESTORE_ARTIFACT_ROOT"
