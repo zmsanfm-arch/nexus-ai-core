@@ -31,7 +31,7 @@ Required worker environment:
 On the dedicated browser Docker host:
 
 1. Build `Dockerfile.browser-egress` and `Dockerfile.playwright-runner` with a digest-pinned Python base image. Make both images available locally on that host.
-2. Create one dedicated external bridge network for the egress proxy. Run the egress proxy container only on that network with `NEXUS_EGRESS_PROXY_MODE=allowlist-v1` and `NEXUS_EGRESS_ALLOWED_DOMAINS` configured. Do not publish port 3128 to the host or public Internet.
+2. Create one dedicated external bridge network for the egress proxy. Run the egress proxy container only on that network with `NEXUS_EGRESS_PROXY_MODE=allowlist-v1` and `NEXUS_EGRESS_ALLOWED_DOMAINS` configured. Use a read-only root filesystem, drop all capabilities, enable no-new-privileges, and apply CPU/memory/PID limits. Do not publish port 3128 to the host or public Internet.
 3. Do not attach other containers to the proxy's external bridge network. At runtime, the runner verifies that the proxy is the only member of that network and that it is the only container on each ephemeral internal browser network.
 4. The egress proxy must be the only route from the internal browser network to public destinations. It permits only allowlisted HTTPS CONNECT destinations and rejects private, loopback, link-local, multicast, reserved, and IP-literal destinations. The browser network itself is Docker-internal.
 5. Use a dedicated TLS-protected Docker daemon and client certificates. Never mount `/var/run/docker.sock` into the application worker.
