@@ -45,16 +45,21 @@ class DockerSandbox:
             workspace = Path(directory)
             source_file = workspace / "main.py"
             source_file.write_bytes(encoded)
-            os.chmod(workspace, 0o755)
-            os.chmod(source_file, 0o444)
+            # Keep host-side permissions private and map the non-root host identity
+            # into the container so the mounted source remains readable only by it.
+            uid, gid = os.getuid(), os.getgid()
+            if uid == 0:
+                raise SandboxError("sandbox must not be launched by a root host process")
+            os.chmod(workspace, 0o700)
+            os.chmod(source_file, 0o400)
             command = [
                 docker, "run", "--rm", "--pull=never",
                 "--network=none", "--read-only",
                 "--cap-drop=ALL", "--security-opt=no-new-privileges",
                 "--pids-limit", str(self.pids_limit),
                 "--memory", self.memory, "--cpus", self.cpus,
-                "--user", "65534:65534",
-                "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m",
+                "--user", f"{uid}:{gid}",
+                "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m",  # nosec B108: container tmpfs target, not a host temp path
                 "--mount", f"type=bind,src={source_file},dst=/workspace/main.py,readonly",
                 "--workdir", "/workspace",
                 self.image, "python", "-I", "/workspace/main.py",
