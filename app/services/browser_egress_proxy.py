@@ -20,11 +20,20 @@ IDLE_TIMEOUT = 300
 MAX_CONNECTIONS = 32
 
 
+def _valid_domain(value: str) -> bool:
+    if not isinstance(value, str) or len(value) > 253:
+        return False
+    return all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in value.split(".")
+    )
+
+
 def load_allowlist(value: str) -> frozenset[str]:
     domains = set()
     for item in value.split(","):
         domain = item.strip().lower().rstrip(".")
-        if not domain or not re.fullmatch(r"[a-z0-9.-]{1,253}", domain) or ".." in domain:
+        if not _valid_domain(domain):
             raise ValueError("NEXUS_EGRESS_ALLOWED_DOMAINS contains an invalid domain")
         domains.add(domain)
     if not domains:
@@ -119,7 +128,7 @@ class EgressProxy:
                     raise ValueError("IP-literal destinations are forbidden")
                 if raw_port != "443" or not host_allowed(host, self.allowed_domains):
                     raise ValueError("destination is not allowlisted")
-                if not re.fullmatch(r"[a-z0-9.-]{1,253}", host) or ".." in host:
+                if not _valid_domain(host):
                     raise ValueError("invalid destination hostname")
                 header_bytes = 0
                 while True:
