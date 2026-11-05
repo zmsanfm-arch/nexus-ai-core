@@ -107,7 +107,7 @@ def test_offline_build_runs_against_real_docker_daemon(tmp_path, monkeypatch):
     if not image:
         pytest.skip("real Docker integration image is not configured")
     (tmp_path / "Dockerfile").write_text(
-        f"FROM {image}\\nRUN echo sandbox-ok > /sandbox-proof\\n"
+        f"FROM {image}\nRUN echo sandbox-ok > /sandbox-proof\n"
     )
     builder = OfflineDockerBuild(
         base_image_allowlist={image},
