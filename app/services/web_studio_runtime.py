@@ -57,8 +57,8 @@ class OfflineDockerBuild:
             stripped = line.strip()
             if stripped and not stripped.startswith("#") and re.match(r"(?i)^FROM\\s+", stripped):
                 parts = stripped.split()
-                image = parts[-1]
-                if image.lower() == "as" or "@sha256:" not in image:
+                image = next((part for part in parts[1:] if not part.startswith("--")), "")
+                if not image or image.lower() == "as" or "@sha256:" not in image:
                     raise WebRuntimeError("every FROM image must be digest-pinned")
                 from_images.append(image)
         if not from_images or any(image not in self.base_image_allowlist for image in from_images):
@@ -74,13 +74,16 @@ class OfflineDockerBuild:
                 total += item.stat().st_size
                 if total > self.max_context_bytes:
                     raise WebRuntimeError("build context exceeds configured size limit")
-                if relative.parts[0] in {".git", ".env", "secrets"}:
+                if any(part == ".git" or part == "secrets" or part.startswith(".env") for part in relative.parts):
                     raise WebRuntimeError("sensitive paths are forbidden in build context")
                 files.append(item)
         return files, total
 
     def build(self, context_dir: str | Path) -> dict[str, Any]:
-        root = Path(context_dir).resolve()
+        supplied_root = Path(context_dir).expanduser()
+        if supplied_root.is_symlink():
+            raise WebRuntimeError("build context must not be a symlink")
+        root = supplied_root.resolve()
         files, context_size = self._validate_context(root)
         docker = shutil.which(self.docker_binary)
         if not docker:
@@ -93,11 +96,12 @@ class OfflineDockerBuild:
                     tar.add(item, arcname=item.relative_to(root).as_posix(), recursive=False)
             command = [
                 docker, "build", "--network=none", "--pull=false", "--no-cache",
-                "--memory", self.memory, "--cpus", self.cpus,
-                "--tag", tag, "--file", "Dockerfile", str(archive),
+                "--memory", self.memory, "--cpu-period", "100000",
+                "--cpu-quota", str(int(float(self.cpus) * 100000)),
+                "--tag", tag, "--file", "Dockerfile", "-",
             ]
             try:
-                result = subprocess.run(command, capture_output=True, text=True,
+                result = subprocess.run(command, input=archive.read_bytes(), capture_output=True, text=True,
                                          timeout=self.timeout_seconds, check=False,
                                          env={"PATH": os.path.dirname(docker), "DOCKER_BUILDKIT": "1"})
             except subprocess.TimeoutExpired as exc:
