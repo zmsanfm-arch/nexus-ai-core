@@ -18,6 +18,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
+COPY web_studio ./web_studio
 COPY scripts ./scripts
 COPY agents ./agents
 COPY docs ./docs
