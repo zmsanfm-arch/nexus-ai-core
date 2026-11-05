@@ -163,6 +163,11 @@ jobs:
           rm -f .env.production
       - name: Build container
         run: docker build --tag nexus-ai-core:ci .
+      - name: Build dedicated mission worker image with remote Docker CLI
+        run: |
+          set -euo pipefail
+          docker build --build-arg INSTALL_DOCKER_CLI=true --tag nexus-mission-worker:ci .
+          docker run --rm --entrypoint docker nexus-mission-worker:ci --version
       - name: Smoke-test container startup and health
         run: |
           set -eu
