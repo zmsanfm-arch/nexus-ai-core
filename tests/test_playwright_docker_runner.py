@@ -122,8 +122,10 @@ def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypat
     assert result["screenshots"][0]["content"] == b"png-data"
     assert "--network" in command and any(x.startswith("nexus-browser-internal-") for x in command)
     assert any(call[:3] == ["network", "create", "--internal"] for call in docker_calls)
+    assert any(call[:2] == ["rm", "-f"] for call in docker_calls)
     assert any(call[:2] == ["network", "disconnect"] for call in docker_calls)
     assert any(call[:2] == ["network", "rm"] for call in docker_calls)
+    assert "--name" in command
     assert "--read-only" in command
     assert "--cap-drop" in command and "ALL" in command
     assert "--security-opt" in command and "no-new-privileges:true" in command
