@@ -1,0 +1,9 @@
+agent_id: web_visual_qa
+name: Web Visual QA
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.visual.audit
+permissions: []
+requested_permissions: []

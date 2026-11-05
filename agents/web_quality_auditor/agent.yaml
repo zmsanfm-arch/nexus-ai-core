@@ -1,0 +1,9 @@
+agent_id: web_quality_auditor
+name: Web Quality Auditor
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.quality.audit
+permissions: []
+requested_permissions: []

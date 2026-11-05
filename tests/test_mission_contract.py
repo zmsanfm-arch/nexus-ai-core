@@ -14,15 +14,17 @@ def mission_payload():
         "name": "YouTube channel research workflow",
         "objective": "Research current video formats and propose a content plan.",
         "nodes": [
-            {"node_id": "research", "agent_id": "research"},
+            {"node_id": "research", "agent_id": "research", "capability": "research.read"},
             {
                 "node_id": "analysis",
                 "agent_id": "analysis",
+                "capability": "analysis.review",
                 "dependencies": ["research"],
             },
             {
                 "node_id": "audit",
                 "agent_id": "auditor",
+                "capability": "audit.review",
                 "dependencies": ["analysis"],
             },
         ],
@@ -46,8 +48,8 @@ def test_mission_rejects_unknown_agents():
 def test_mission_rejects_cycles_and_unknown_dependencies():
     payload = mission_payload()
     payload["nodes"] = [
-        {"node_id": "research", "agent_id": "research", "dependencies": ["audit"]},
-        {"node_id": "audit", "agent_id": "auditor", "dependencies": ["research"]},
+        {"node_id": "research", "agent_id": "research", "capability": "research.read", "dependencies": ["audit"]},
+        {"node_id": "audit", "agent_id": "auditor", "capability": "audit.review", "dependencies": ["research"]},
     ]
     with pytest.raises(ValidationError, match="dependency cycle"):
         MissionDefinition.model_validate(payload)
