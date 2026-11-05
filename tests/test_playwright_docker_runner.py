@@ -85,7 +85,7 @@ def test_playwright_runner_rejects_other_containers_on_browser_network(monkeypat
 
 def test_playwright_runner_uses_hardened_container_and_parses_evidence(monkeypatch):
     runner = make_runner()
-    monkeypatch.setattr(runner, "_verify_network", lambda: {"example.com"})
+    monkeypatch.setattr(runner, "_verify_network", lambda _network: {"example.com"})
     docker_calls = []
     monkeypatch.setattr(runner, "_docker", lambda args, timeout=10: docker_calls.append(args) or "")
     monkeypatch.setattr("app.services.playwright_docker_runner.shutil.which", lambda _: "/usr/bin/docker")
