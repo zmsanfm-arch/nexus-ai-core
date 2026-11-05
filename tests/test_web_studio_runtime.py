@@ -83,3 +83,17 @@ def test_browser_tester_rejects_missing_principal():
                               request="Test website")
     with pytest.raises(WebRuntimeError, match="principal"):
         handler.run(request)
+
+def test_all_web_studio_capabilities_have_central_permissions():
+    from app.services.permissions import CAPABILITY_PERMISSIONS, CORE_ALLOWED_PERMISSIONS
+    expected = {
+        "web.mission.orchestrate", "web.brief.analyze", "web.research.public",
+        "web.ux.architecture", "web.ui.design", "web.visual.identity",
+        "web.motion.design", "web.content.plan", "web.seo.audit",
+        "web.frontend.build", "web.backend.build", "web.cms.integrate",
+        "web.accessibility.audit", "web.browser.test", "web.visual.audit",
+        "web.performance.audit", "web.security.audit", "web.conversion.analyze",
+        "web.release.prepare", "web.quality.audit", "web.maintenance.review",
+    }
+    assert expected <= set(CAPABILITY_PERMISSIONS)
+    assert {CAPABILITY_PERMISSIONS[key] for key in expected} <= CORE_ALLOWED_PERMISSIONS
