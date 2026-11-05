@@ -116,7 +116,9 @@ def test_offline_build_runs_against_real_docker_daemon(tmp_path, monkeypatch):
         cpus="2",
     )
     result = builder.build(tmp_path)
-    assert result["success"] is True, result
+    assert result["success"] is True, (
+        f"exit={result['exit_code']} stdout={result['stdout']} stderr={result['stderr']}"
+    )
     assert result["network"] == "disabled"
     assert result["pull"] == "disabled"
     assert result["image_tag"]
