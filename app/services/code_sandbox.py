@@ -45,7 +45,8 @@ class DockerSandbox:
             workspace = Path(directory)
             source_file = workspace / "main.py"
             source_file.write_bytes(encoded)
-            os.chmod(source_file, 0o400)
+            os.chmod(workspace, 0o755)
+            os.chmod(source_file, 0o444)
             command = [
                 docker, "run", "--rm", "--pull=never",
                 "--network=none", "--read-only",
