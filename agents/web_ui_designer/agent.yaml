@@ -1,0 +1,9 @@
+agent_id: web_ui_designer
+name: Web UI Designer
+version: 0.1.0
+status: disabled
+mode: advisory
+capabilities:
+  - web.ui.design
+permissions: []
+requested_permissions: []
