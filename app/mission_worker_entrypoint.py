@@ -39,7 +39,13 @@ def run() -> None:
     artifact_store = LocalArtifactStore(artifact_root)
     worker = MissionRunWorker(
         repository=MissionRunRepository(store), registry=registry,
-        handlers={\n            "ict_mentor": ICTMentorHandler(model_router, knowledge_store),\n            **{agent_id: WebStudioSpecialistHandler(agent_id, model_router)\n               for agent_id in WEB_STUDIO_ROLE_PROMPTS},\n        },
+        handlers={
+            "ict_mentor": ICTMentorHandler(model_router, knowledge_store),
+            **{
+                agent_id: WebStudioSpecialistHandler(agent_id, model_router)
+                for agent_id in WEB_STUDIO_ROLE_PROMPTS
+            },
+        },
         storage=store,
         worker_id=f"{os.getenv('NEXUS_MISSION_WORKER_ID', socket.gethostname())[:100]}-{uuid4().hex[:16]}",
         lease_seconds=lease_seconds, artifact_store=artifact_store,
