@@ -57,6 +57,10 @@ The current token model supports one configured API principal, not multi-user id
 
 - `GET /health`
 - `GET /agents`
+- `POST /missions` (validates and stores a mission definition; does not start a run)
+- `GET /missions/{mission_id}` (principal-scoped definition read)
+- `POST /missions/{mission_id}/runs` (queues a run; requires `Idempotency-Key`)
+- `GET /missions/{mission_id}/runs/{run_id}` (principal-scoped run status)
 - `POST /tasks`
 - `POST /tasks/queued`
 - `GET /tasks/{task_id}`
