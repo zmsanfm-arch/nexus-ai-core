@@ -229,17 +229,21 @@ class MissionRunRepository:
                 raise ValueError("Mission lease is not owned by this worker.")
             run = session.get(MissionRunRecord, run_id)
             if status == "failed" and queue.attempts < max_attempts:
+                effective_status = "queued"
                 queue.status = "queued"
                 queue.available_at = now + timedelta(seconds=max(0, retry_delay_seconds))
-                run.status = "queued"
             else:
+                effective_status = "failed" if status == "failed" else status
                 queue.status = "dead" if status == "failed" else "completed"
-                run.status = "failed" if status == "failed" else status
             queue.last_error = error[:500] if error else None
             queue.lease_owner = None
             queue.lease_expires_at = None
             queue.updated_at = now
-            run.updated_at = now
+            if run is not None:
+                run.status = effective_status
+                run.updated_at = now
             if audit_event is not None:
-                session.add(AuditRecord(data=dict(audit_event), recorded_at=now))
-            return run.status
+                event_data = dict(audit_event)
+                event_data["status"] = effective_status
+                session.add(AuditRecord(data=event_data, recorded_at=now))
+            return effective_status
