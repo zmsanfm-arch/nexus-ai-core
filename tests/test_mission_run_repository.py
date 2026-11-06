@@ -88,3 +88,55 @@ def test_checkpoint_requires_current_worker_lease(tmp_path):
             raise AssertionError("checkpoint writes must require the active lease")
     finally:
         store.close()
+
+
+def test_finish_persists_terminal_audit_in_same_transaction(tmp_path):
+    store = make_store(tmp_path)
+    try:
+        repo = MissionRunRepository(store)
+        run = repo.enqueue("demo_mission", "principal-a", "audit-atomic", mission_data())
+        repo.claim_next("audit-worker", lease_seconds=30)
+        result = repo.finish(
+            run["run_id"], "audit-worker", "completed",
+            audit_event={"event": "mission_run_finished", "run_id": run["run_id"], "status": "completed"},
+        )
+        assert result == "completed"
+        events = store.list_audit(limit=20)
+        assert any(
+            event.get("event") == "mission_run_finished"
+            and event.get("run_id") == run["run_id"]
+            for event in events
+        )
+        snapshot = repo.get(run["run_id"], "principal-a")
+        assert snapshot["status"] == "completed"
+    finally:
+        store.close()
+
+
+def test_finish_rolls_back_terminal_state_if_audit_cannot_be_serialized(tmp_path):
+    store = make_store(tmp_path)
+    try:
+        repo = MissionRunRepository(store)
+        run = repo.enqueue("demo_mission", "principal-a", "audit-rollback", mission_data())
+        repo.claim_next("audit-worker", lease_seconds=30)
+        try:
+            repo.finish(
+                run["run_id"], "audit-worker", "completed",
+                audit_event={"event": "mission_run_finished", "invalid": object()},
+            )
+        except (TypeError, ValueError):
+            pass
+        else:
+            raise AssertionError("non-JSON audit data must fail the transaction")
+        snapshot = repo.get(run["run_id"], "principal-a")
+        assert snapshot["status"] == "running"
+        queue = store.sessions()
+        try:
+            from app.services.mission_run_repository import MissionQueueRecord
+            record = queue.get(MissionQueueRecord, run["run_id"])
+            assert record.status == "leased"
+            assert record.lease_owner == "audit-worker"
+        finally:
+            queue.close()
+    finally:
+        store.close()
