@@ -93,7 +93,7 @@ Operators may mistake historical or different-SHA evidence for current verificat
 **Required fix**
 Regenerate the release evidence section from the exact candidate SHA, link each workflow run to that SHA, and distinguish deployment status from test/build/security checks.
 
-**Status:** Identified; documentation update pending.
+**Status:** Candidate runbook update committed: historical snapshots are labeled as such, and the exact current main SHA plus deployment-only status and blocked CI evidence are recorded. CI verification pending.
 
 ### F-05 — MEDIUM: governance is not a universal execution gate
 
@@ -142,7 +142,7 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 - CI workflow defines Python 3.11/3.12 tests, PostgreSQL-backed tests, encrypted backup/restore drill, container smoke test, dependency audit, Bandit, and a browser-fixture job. The existence of these workflow jobs is not evidence that they passed on the audited SHA.
 - PR #35 is Web Studio and excluded.
 - PR #26 is the independent security/recovery handoff and excluded from this implementation audit.
-- Candidate source changes for F-01 and F-02 are committed on the audit branch; they are not merged and are not CI-verified. F-04 remains open; F-03 has a candidate transactional fix and regression tests awaiting CI.
+- Candidate source changes for F-01 and F-02 are committed on the audit branch; they are not merged and are not CI-verified. F-03 and F-04 have candidate fixes/documentation committed; all candidate changes await CI verification.
 - Independent security review remains a separate final handoff gate.
 
 ## Remediation order
@@ -157,7 +157,7 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 - [x] F-01 candidate fix and PostgreSQL/in-memory regression tests committed; CI verification pending.
 - [x] F-02 candidate fix and API contract regression test committed; CI verification pending.
 - [x] F-03 candidate fix and transaction rollback/success regression tests committed; CI verification pending.
-- [ ] F-04 updated with exact-SHA evidence.
+- [x] F-04 candidate runbook update committed with exact-SHA evidence; CI verification pending.
 - [ ] All in-scope modules have source/test-backed status.
 - [ ] Candidate CI is green on the exact candidate SHA.
 - [ ] No Web Studio files changed.
