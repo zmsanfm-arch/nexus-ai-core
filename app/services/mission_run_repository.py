@@ -9,7 +9,7 @@ from sqlalchemy import DateTime, Integer, JSON, String, UniqueConstraint, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.storage import Base
+from app.storage import AuditRecord, Base
 
 
 class MissionRunRecord(Base):
@@ -214,7 +214,7 @@ class MissionRunRepository:
 
     def finish(self, run_id: str, worker_id: str, status: str,
                error: str | None = None, retry_delay_seconds: int = 30,
-               max_attempts: int = 3) -> str:
+               max_attempts: int = 3, audit_event: dict[str, Any] | None = None) -> str:
         if status not in {"completed", "failed", "blocked", "review_required", "nodes_succeeded"}:
             raise ValueError("Invalid terminal mission status.")
         now = datetime.now(timezone.utc)
@@ -240,4 +240,6 @@ class MissionRunRepository:
             queue.lease_expires_at = None
             queue.updated_at = now
             run.updated_at = now
+            if audit_event is not None:
+                session.add(AuditRecord(data=dict(audit_event), recorded_at=now))
             return run.status
