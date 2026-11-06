@@ -63,9 +63,9 @@ Add SQL transaction methods that lock the queue row, verify status=leased, match
 Clients receive contradictory capability metadata for the same persisted definition.
 
 **Required fix**
-Use one consistent response contract. Prefer an explicit field such as `run_submission_available: true` and retain `execution_status: not_started`; do not imply that creating a definition starts execution.
+Use one consistent response contract: both POST and GET return `run_submission_available: true` with `execution_status: not_started`; this indicates that a run can be submitted separately and does not imply that creating a definition starts execution.
 
-**Status:** Candidate fix and API regression test committed; awaiting CI verification.
+**Status:** Candidate fix uses `run_submission_available` consistently on POST and GET, with an API regression test; CI verification pending.
 
 ### F-03 — MEDIUM: mission terminal status and final audit event are separate commits
 
