@@ -77,9 +77,9 @@ Use one consistent response contract. Prefer an explicit field such as `run_subm
 A crash or audit-storage error after terminal status commit can leave a completed/blocked run without its corresponding terminal audit event.
 
 **Required fix**
-If terminal audit is mandatory, persist it in the same database transaction as terminal state. Otherwise use a transactional outbox and retryable audit delivery. Define and test the invariant.
+Persist a terminal/attempt outcome in the same SQL transaction as the queue transition. Every terminal path (success, blocked, exhausted retries, malformed definition, and missing run record) must emit the corresponding event; retryable failures must be distinguishable from terminal failures.
 
-**Status:** Candidate fix committed: terminal run state and its final audit event now share one SQL transaction; success and rollback regression tests added. CI verification pending.
+**Status:** Candidate fix committed: mission run status, queue transition, and terminal/attempt audit event now share one SQL transaction. Worker terminal paths use this method; orphaned queue records are dead-lettered safely even when the run row is missing. Success, rollback, and orphan-row regression tests added. CI verification pending.
 
 ### F-04 — MEDIUM: operational evidence in runbook is stale
 
