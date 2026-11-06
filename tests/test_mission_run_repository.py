@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.storage import SQLAlchemyStore
 from app.services.mission_run_repository import (
     MissionQueueRecord,
+    MissionRunRecord,
     MissionRunRepository,
 )
 
