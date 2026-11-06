@@ -3,14 +3,14 @@
 **Audit date:** 2026-11-06  
 **Audited base:** `main` at `150503ea10a9bf693a1abc9b997773ef9d89cc4b`  
 **Scope:** Core platform outside Web Studio  
-**Status:** Audit findings documented; remediation and candidate CI are not complete.  
+**Status:** Audit findings documented; F-01 and F-02 have candidate fixes and regression tests on the audit branch; candidate CI remains blocked by GitHub Actions runner allocation.  
 **Explicit exclusions:** Web Studio and PR #35; public production exposure, DNS/TLS, external secrets, broker/live-trading connectivity; independent external security assessment.
 
 ## Executive summary
 
 The repository contains a functioning advisory API, durable SQL-backed task and mission queues, lease-based workers, principal-scoped mission/artifact reads, model-provider transport controls, knowledge ingestion/search, research/backtesting routes, and deployment/backup tooling. Several architectural targets remain only partially implemented: multi-user identity, semantic retrieval, capability-based model routing, universal governance enforcement, parallel DAG scheduling, and a general intent/planning layer.
 
-The most important concrete reliability finding is that the generic task worker persists task state and queue state in separate transactions. This can produce inconsistent state around lease expiry, process crashes, or worker takeover. This requires an atomic lease-checked finalization transaction and regression tests.
+The most important concrete reliability finding is that the generic task worker persists task state and queue state in separate transactions. This can produce inconsistent state around lease expiry, process crashes, or worker takeover. An atomic lease-checked finalization transaction and regression tests have been added on the audit branch; the candidate has not yet completed CI.
 
 The exact audited main SHA has a Railway API deployment status of success. The combined status available for that SHA does **not** show a GitHub Actions test/build/security matrix. Therefore, this audit does not claim that the exact main SHA has a green CI matrix.
 
@@ -50,7 +50,7 @@ A process failure or lease expiry/reclaim between the writes can leave task and 
 **Required fix**
 Add SQL transaction methods that lock the queue row, verify status=leased, matching owner, and unexpired lease, then persist task state and complete/requeue the queue row in the same transaction. Implement equivalent atomic semantics in InMemoryStore. Add tests for expired lease rejection, wrong owner, success atomicity, and failure atomicity.
 
-**Status:** Not fixed or CI-verified in this audit branch.
+**Status:** Candidate fix committed; awaiting CI verification.
 
 ### F-02 — MEDIUM: mission definition API reports inconsistent execution availability
 
@@ -65,7 +65,7 @@ Clients receive contradictory capability metadata for the same persisted definit
 **Required fix**
 Use one consistent response contract. Prefer an explicit field such as `run_submission_available: true` and retain `execution_status: not_started`; do not imply that creating a definition starts execution.
 
-**Status:** Not fixed or CI-verified.
+**Status:** Candidate fix and API regression test committed; awaiting CI verification.
 
 ### F-03 — MEDIUM: mission terminal status and final audit event are separate commits
 
@@ -142,22 +142,20 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 - CI workflow defines Python 3.11/3.12 tests, PostgreSQL-backed tests, encrypted backup/restore drill, container smoke test, dependency audit, Bandit, and a browser-fixture job. The existence of these workflow jobs is not evidence that they passed on the audited SHA.
 - PR #35 is Web Studio and excluded.
 - PR #26 is the independent security/recovery handoff and excluded from this implementation audit.
-- No source-code remediation is claimed by this report. Findings F-01 through F-04 require implementation/documentation changes and exact-SHA CI before closure.
+- Candidate source changes for F-01 and F-02 are committed on the audit branch; they are not merged and are not CI-verified. F-03 and F-04 remain open.
 - Independent security review remains a separate final handoff gate.
 
 ## Remediation order
 
-1. F-01: atomic task finalization and lease-expiry regression tests.
-2. F-02: consistent mission API capability contract and API tests.
-3. F-03: transactional terminal audit or outbox plus failure-injection tests.
-4. F-04: reconcile operational evidence against exact release SHA and workflow runs.
-5. F-05: document and enforce universal policy boundary before enabling action-capable handlers.
-6. F-06: keep sequential execution until a separately scoped bounded-concurrency design is validated.
+1. F-03: transactional terminal audit or outbox plus failure-injection tests.
+2. F-04: reconcile operational evidence against exact release SHA and workflow runs.
+3. F-05: document and enforce universal policy boundary before enabling action-capable handlers.
+4. F-06: keep sequential execution until a separately scoped bounded-concurrency design is validated.
 
 ## Acceptance checklist
 
-- [ ] F-01 fixed; PostgreSQL and in-memory regression tests pass.
-- [ ] F-02 fixed; API contract tests pass.
+- [x] F-01 candidate fix and PostgreSQL/in-memory regression tests committed; CI verification pending.
+- [x] F-02 candidate fix and API contract regression test committed; CI verification pending.
 - [ ] F-03 fixed; failure-injection tests prove terminal audit durability.
 - [ ] F-04 updated with exact-SHA evidence.
 - [ ] All in-scope modules have source/test-backed status.
