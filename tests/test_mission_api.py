@@ -70,7 +70,7 @@ def test_mission_definition_api_validates_and_persists_without_execution(monkeyp
     body = response.json()
     assert body["mission"]["mission_id"] == "demo_mission"
     assert body["execution_status"] == "not_started"
-    assert body["execution_available"] is True
+    assert body["run_submission_available"] is True
 
 
 def test_mission_definition_api_rejects_unknown_agent(monkeypatch):
@@ -108,4 +108,4 @@ def test_mission_definition_get_reports_run_submission_consistently(monkeypatch)
     assert response.status_code == 200
     body = response.json()
     assert body["execution_status"] == "not_started"
-    assert body["execution_available"] is True
+    assert body["run_submission_available"] is True
