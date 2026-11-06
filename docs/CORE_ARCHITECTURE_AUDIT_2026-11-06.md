@@ -147,10 +147,9 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 
 ## Remediation order
 
-1. F-03: transactional terminal audit or outbox plus failure-injection tests.
-2. F-04: reconcile operational evidence against exact release SHA and workflow runs.
-3. F-05: document and enforce universal policy boundary before enabling action-capable handlers.
-4. F-06: keep sequential execution until a separately scoped bounded-concurrency design is validated.
+1. F-05: document and enforce universal policy boundary before enabling action-capable handlers.
+2. F-06: keep sequential execution until a separately scoped bounded-concurrency design is validated.
+3. Run the complete CI matrix on the exact PR head SHA once GitHub runner allocation is restored.
 
 ## Acceptance checklist
 
@@ -160,5 +159,5 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 - [x] F-04 candidate runbook update committed with exact-SHA evidence; CI verification pending.
 - [ ] All in-scope modules have source/test-backed status.
 - [ ] Candidate CI is green on the exact candidate SHA.
-- [ ] No Web Studio files changed.
+- [x] No Web Studio files changed in the PR diff.
 - [ ] External independent security assessment remains scheduled for final handoff.
