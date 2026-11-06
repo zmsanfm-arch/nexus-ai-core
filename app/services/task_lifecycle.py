@@ -116,8 +116,7 @@ class TaskWorker:
             audit_verdict = result.get("audit_verdict")
             task["status"] = "completed" if audit_verdict == "pass" else "blocked"
             task["completed_at"] = datetime.now(timezone.utc).isoformat()
-            self.storage.save_task(task)
-            self.storage.complete_queued_task(task_id, self.worker_id)
+            self.storage.complete_queued_task_with_result(task_id, self.worker_id, task)
             self.storage.append_audit({
                 "event": "task_worker_completed",
                 "task_id": task_id,
@@ -134,14 +133,13 @@ class TaskWorker:
                     "error_type": type(exc).__name__,
                 })
                 return True
-            queue_status = self.storage.fail_queued_task(
-                task_id, self.worker_id, type(exc).__name__,
+            task["status"] = "failed" if lease["attempts"] >= self.max_attempts else "queued"
+            task["result"] = "Task execution failed; see audit event."
+            queue_status = self.storage.fail_queued_task_with_result(
+                task_id, self.worker_id, type(exc).__name__, task,
                 max_attempts=self.max_attempts,
                 retry_delay_seconds=self.retry_delay_seconds,
             )
-            task["status"] = "failed" if queue_status == "dead" else "queued"
-            task["result"] = "Task execution failed; see audit event."
-            self.storage.save_task(task)
             self.storage.append_audit({
                 "event": "task_worker_failed",
                 "task_id": task_id,
