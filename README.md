@@ -19,6 +19,17 @@ The handler retrieves source segments from the NEXUS-owned knowledge store, vali
 
 **Trading boundary:** ICT Mentor is advisory-only. Position monitoring, position management, autonomous execution, MT5/broker connectivity, account/position access, order placement/cancellation, and live trading remain disabled. Backtesting is deterministic research-only midpoint OHLC simulation, not broker-grade execution simulation and never authorizes a trade.
 
+## Web Studio specialists
+
+The 21 Web Studio roles are registered for sequential advisory mission execution.
+Each role has a distinct model-backed handler and the only central permission
+grant is `mission_input.read`. Handlers receive the user objective and
+completed dependency outputs only; they have no browser, filesystem, network,
+repository, CMS, deployment, DNS/TLS, secret, payment, or publishing tools.
+The browser-tester role writes a test plan and does not launch a browser.
+External side effects remain denied by default. YouTube/Media ingestion,
+live browsing, and autonomous publishing are not implemented.
+
 ## Model configuration
 
 Configure these in the runtime environment or deployment secret manager:
