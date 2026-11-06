@@ -1,7 +1,7 @@
 """Fail-closed action policy for the Web Development Studio.
 
 This module is a policy contract, not an execution adapter. It deliberately
-does not grant capabilities to the disabled Web Studio manifests.
+does not grant connector access or external side-effect permissions to Web Studio.
 """
 from __future__ import annotations
 
