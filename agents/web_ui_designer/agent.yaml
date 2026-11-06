@@ -1,9 +1,11 @@
 agent_id: web_ui_designer
 name: Web UI Designer
 version: 0.1.0
-status: disabled
+status: registered
 mode: advisory
 capabilities:
   - web.ui.design
-permissions: []
-requested_permissions: []
+permissions:
+  - mission_input.read
+requested_permissions:
+  - mission_input.read

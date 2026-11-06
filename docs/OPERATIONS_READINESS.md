@@ -2,7 +2,17 @@
 
 **Status: NOT APPROVED FOR PUBLIC PRODUCTION.** This runbook prepares a controlled deployment and records current evidence. It does not authorize public launch, external model-provider use, or trading connectivity.
 
-## Current Railway deployment evidence (2026-11-04)
+## Evidence freshness — 2026-11-06
+
+The dated deployment and CI entries below are historical snapshots and must not be interpreted as verification of the current main revision.
+
+- Audited main SHA: `150503ea10a9bf693a1abc9b997773ef9d89cc4b`.
+- The combined status on that exact SHA reports the Railway API deployment as successful. It does not report a complete GitHub Actions test/build/security matrix.
+- GitHub Actions run [#744](https://github.com/zmsanfm-arch/nexus-ai-core/actions/runs/42196815895) for the audited main SHA failed before any job step ran; the job step lists are empty. This is a runner/service allocation failure pattern, not a test result.
+- Audit remediation is isolated in draft [PR #38](https://github.com/zmsanfm-arch/nexus-ai-core/pull/38), head SHA `13dfd356bf13bd5c0c7f67ad34c7c85c17dd49e2`. It is not merged or deployed. Its workflow run [#752](https://github.com/zmsanfm-arch/nexus-ai-core/actions/runs/42197160533) also failed before any job step ran.
+- Do not infer test success from deployment success or from historical CI runs on different SHAs. Before release, rerun the complete CI matrix on the exact candidate SHA and verify that each job actually executes and passes.
+
+## Historical Railway deployment evidence (snapshot 2026-11-04)
 
 - Main release commit: `6d3293b1b58be7a5a37f07de27dc6d212b2d3538`.
 - Railway API deployment: `0bec6b64-f828-4615-8dfc-8f1fd9e5ead7`; state `SUCCESS`, one replica online.
@@ -40,7 +50,7 @@ This is not a substitute for host hardening, firewall rules, TLS, backups, monit
 
 ## Preflight — required before public exposure
 
-1. Core PR chain #1–#7 and #9–#19 is merged; PR #8 is closed as superseded. The latest production release is main commit `2346dab5b83cebd9da3f8f901d92b9c5f4a409d6`. Keep subsequent changes behind green CI and review.
+1. The PR chain and release SHAs recorded in the dated sections below are historical snapshots. Verify the live main SHA and its exact-SHA CI evidence before every new release; as of 2026-11-06, main is `150503ea10a9bf693a1abc9b997773ef9d89cc4b` and its available combined status is deployment-only.
 2. Confirm required CI checks on the exact merge candidate SHA. CI run 430 passed on PR #19 candidate SHA `8ac327151818324234ef1287de862e9dc6a7cb42`; the corresponding merge is deployed successfully. Continue to validate exact candidate SHAs for future changes.
 3. Provision a supported Linux host, restrict inbound firewall access, patch the OS, configure SSH key-only access, and install Docker Engine/Compose. Do not expose port 8000 directly.
 4. Configure the opt-in Caddy reverse proxy in `deploy/Caddyfile` after DNS A/AAAA records point to the host. Set `NEXUS_DOMAIN`, open inbound 80/443, validate certificate issuance, and start only the `public` Compose profile. The proxy enforces the configured host, 10 MB request body limit, HTTPS certificate automation, and security headers; API port 8000 remains loopback-only on the host.

@@ -1,3 +1,4 @@
+from app.services.permissions import PermissionService
 from app.services.registry import AgentRegistry
 
 
@@ -26,13 +27,16 @@ WEB_STUDIO_AGENT_IDS = {
 }
 
 
-def test_web_studio_roles_are_discoverable_but_disabled():
+def test_all_21_web_studio_roles_are_enabled_with_least_privilege():
     registry = AgentRegistry()
     registered = {item["id"]: item for item in registry.list_agents()}
     assert WEB_STUDIO_AGENT_IDS <= registered.keys()
+    policy = PermissionService()
     for agent_id in WEB_STUDIO_AGENT_IDS:
         agent = registered[agent_id]
-        assert agent["status"] == "disabled"
+        assert agent["status"] == "registered"
         assert agent["mode"] == "advisory"
-        assert agent["permissions"] == []
-        assert registry.resolve_capability(agent["capabilities"][0]) == []
+        assert agent["permissions"] == ["mission_input.read"]
+        assert agent["requested_permissions"] == ["mission_input.read"]
+        assert len(registry.resolve_capability(agent["capabilities"][0])) == 1
+        assert policy.authorize(agent, agent["capabilities"][0]) == "mission_input.read"

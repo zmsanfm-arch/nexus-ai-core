@@ -173,3 +173,49 @@ def test_sql_store_renews_only_owned_unexpired_lease(tmp_path):
     assert store.renew_queued_task_lease(task["id"], "wrong-worker", 30) is False
     assert store.renew_queued_task_lease(task["id"], "sql-worker", 30) is True
     store.close()
+
+
+def test_worker_finalizes_result_atomically_with_current_unexpired_lease(tmp_path):
+    store = SQLAlchemyStore(f"sqlite:///{tmp_path / 'atomic-finalize.db'}")
+    task = TaskQueueService(store).enqueue("Run an atomic completion task")
+    lease = store.claim_next_task("atomic-worker", lease_seconds=30)
+    assert lease["task_id"] == task["id"]
+    updated = store.get_task(task["id"])
+    updated["status"] = "completed"
+    updated["result"] = {"audit_verdict": "pass"}
+    assert store.complete_queued_task_with_result(task["id"], "atomic-worker", updated) == "completed"
+    assert store.get_task(task["id"])["result"] == {"audit_verdict": "pass"}
+    assert store.queue_summary()["completed"] == 1
+    store.close()
+
+
+def test_worker_cannot_persist_result_after_lease_expires():
+    store = InMemoryStore()
+    task = TaskQueueService(store).enqueue("Run an expired lease task")
+    lease = store.claim_next_task("expired-worker", lease_seconds=30)
+    assert lease["task_id"] == task["id"]
+    store.queue[task["id"]]["lease_expires_at"] = store.queue[task["id"]]["lease_expires_at"].replace(year=2000)
+    updated = store.get_task(task["id"])
+    updated["status"] = "completed"
+    with pytest.raises(ValueError, match="not owned"):
+        store.complete_queued_task_with_result(task["id"], "expired-worker", updated)
+    assert store.get_task(task["id"])["status"] == "queued"
+    assert store.queue[task["id"]]["status"] == "leased"
+
+
+def test_worker_failure_state_and_retry_are_atomic():
+    store = InMemoryStore()
+    task = TaskQueueService(store).enqueue("Run an atomic failure task")
+    lease = store.claim_next_task("failure-worker", lease_seconds=30)
+    assert lease["task_id"] == task["id"]
+    updated = store.get_task(task["id"])
+    updated["status"] = "queued"
+    updated["result"] = "Task execution failed; see audit event."
+    status = store.fail_queued_task_with_result(
+        task["id"], "failure-worker", "RuntimeError", updated,
+        max_attempts=3, retry_delay_seconds=0,
+    )
+    assert status == "queued"
+    assert store.get_task(task["id"])["status"] == "queued"
+    assert store.queue[task["id"]]["status"] == "queued"
+    assert store.queue[task["id"]]["lease_owner"] is None

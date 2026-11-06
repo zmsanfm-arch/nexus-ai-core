@@ -72,13 +72,21 @@ class MissionRunWorker:
             return False
         run_id = claim["run_id"]
         if claim["attempts"] > self.max_queue_attempts:
-            self.repository.finish(run_id, self.worker_id, "failed",
-                                   "mission_queue_attempt_limit_reached", max_attempts=1)
+            self.repository.finish(
+                run_id, self.worker_id, "failed", "mission_queue_attempt_limit_reached",
+                max_attempts=1,
+                audit_event={"event": "mission_run_finished", "run_id": run_id,
+                             "reason": "mission_queue_attempt_limit_reached"},
+            )
             return True
         run = self.repository.get_for_worker(run_id)
         if run is None:
-            self.repository.finish(run_id, self.worker_id, "failed",
-                                   "mission_run_record_missing", max_attempts=1)
+            self.repository.finish(
+                run_id, self.worker_id, "failed", "mission_run_record_missing",
+                max_attempts=1,
+                audit_event={"event": "mission_run_finished", "run_id": run_id,
+                             "reason": "mission_run_record_missing"},
+            )
             return True
 
         try:
@@ -108,26 +116,40 @@ class MissionRunWorker:
                         or spec.capability not in agent.get("capabilities", [])):
                     self.repository.checkpoint_node(run_id, self.worker_id, planned.node_id,
                                                      "blocked", error="agent_or_capability_not_enabled")
-                    self.repository.finish(run_id, self.worker_id, "blocked",
-                                           "agent_or_capability_not_enabled")
+                    self.repository.finish(
+                        run_id, self.worker_id, "blocked", "agent_or_capability_not_enabled",
+                        audit_event={"event": "mission_run_finished", "run_id": run_id,
+                                     "reason": "agent_or_capability_not_enabled"},
+                    )
                     return True
                 try:
                     permission = self.permission_service.authorize(agent, spec.capability)
                 except PermissionDenied:
                     self.repository.checkpoint_node(run_id, self.worker_id, planned.node_id,
                                                      "blocked", error="permission_denied")
-                    self.repository.finish(run_id, self.worker_id, "blocked", "permission_denied")
+                    self.repository.finish(
+                        run_id, self.worker_id, "blocked", "permission_denied",
+                        audit_event={"event": "mission_run_finished", "run_id": run_id,
+                                     "reason": "permission_denied"},
+                    )
                     return True
                 handler = self.handlers.get(planned.agent_id)
                 if handler is None:
                     self.repository.checkpoint_node(run_id, self.worker_id, planned.node_id,
                                                      "blocked", error="handler_unavailable")
-                    self.repository.finish(run_id, self.worker_id, "blocked", "handler_unavailable")
+                    self.repository.finish(
+                        run_id, self.worker_id, "blocked", "handler_unavailable",
+                        audit_event={"event": "mission_run_finished", "run_id": run_id,
+                                     "reason": "handler_unavailable"},
+                    )
                     return True
                 missing = [dep for dep in planned.dependencies if dep not in outputs]
                 if missing:
-                    self.repository.finish(run_id, self.worker_id, "blocked",
-                                           "dependency_checkpoint_missing")
+                    self.repository.finish(
+                        run_id, self.worker_id, "blocked", "dependency_checkpoint_missing",
+                        audit_event={"event": "mission_run_finished", "run_id": run_id,
+                                     "reason": "dependency_checkpoint_missing"},
+                    )
                     return True
 
                 self.repository.checkpoint_node(run_id, self.worker_id, planned.node_id,
@@ -180,14 +202,19 @@ class MissionRunWorker:
                     current = self.repository.get_for_worker(run_id)
                     current_node = next(n for n in current["nodes"] if n["node_id"] == planned.node_id)
                     terminal = current_node["attempts"] >= spec.max_attempts
-                    self.repository.finish(run_id, self.worker_id, "failed", type(exc).__name__,
-                                            retry_delay_seconds=15,
-                                            max_attempts=1 if terminal else self.max_queue_attempts)
+                    self.repository.finish(
+                        run_id, self.worker_id, "failed", type(exc).__name__,
+                        retry_delay_seconds=15,
+                        max_attempts=1 if terminal else self.max_queue_attempts,
+                        audit_event={"event": "mission_run_attempt_failed", "run_id": run_id,
+                                     "node_id": planned.node_id,
+                                     "error_type": type(exc).__name__},
+                    )
                     return True
 
             if self.auditor is None:
                 final_status = "nodes_succeeded"
-                self._audit("mission_nodes_succeeded", run_id, final_audit="not_performed")
+
             else:
                 audit_payload = json.dumps({"mission_id": mission.mission_id,
                                              "objective": mission.objective, "outputs": outputs},
@@ -198,13 +225,22 @@ class MissionRunWorker:
                     mission=mission, outputs=outputs))
                 final_status = {"pass": "completed", "revise": "review_required",
                                 "block": "blocked"}[audit.verdict]
-                self._audit("mission_final_audit_completed", run_id,
-                            verdict=audit.verdict, findings_count=len(audit.findings))
-            self.repository.finish(run_id, self.worker_id, final_status)
-            self._audit("mission_run_finished", run_id, status=final_status)
+            final_event = {
+                "event": "mission_run_finished",
+                "run_id": run_id,
+                "status": final_status,
+                "final_audit": "not_performed" if self.auditor is None else audit.verdict,
+            }
+            if self.auditor is not None:
+                final_event["findings_count"] = len(audit.findings)
+            self.repository.finish(
+                run_id, self.worker_id, final_status, audit_event=final_event,
+            )
         except Exception as exc:
-            self._audit("mission_run_failed", run_id, error_type=type(exc).__name__)
-            self.repository.finish(run_id, self.worker_id, "failed",
-                                    type(exc).__name__, retry_delay_seconds=15,
-                                    max_attempts=self.max_queue_attempts)
+            self.repository.finish(
+                run_id, self.worker_id, "failed", type(exc).__name__,
+                retry_delay_seconds=15, max_attempts=self.max_queue_attempts,
+                audit_event={"event": "mission_run_attempt_failed", "run_id": run_id,
+                             "error_type": type(exc).__name__},
+            )
         return True

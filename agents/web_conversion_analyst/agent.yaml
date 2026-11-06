@@ -1,9 +1,11 @@
 agent_id: web_conversion_analyst
 name: Web Conversion Analyst
 version: 0.1.0
-status: disabled
+status: registered
 mode: advisory
 capabilities:
   - web.conversion.analyze
-permissions: []
-requested_permissions: []
+permissions:
+  - mission_input.read
+requested_permissions:
+  - mission_input.read
