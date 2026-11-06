@@ -23,7 +23,7 @@ Registration is not authorization. The runtime separately verifies the agent's e
 
 ## Example: supported ICT Mentor mission
 
-The following definition uses the only currently enabled specialist handler and
+The following definition uses an enabled specialist handler and
 capabilities that have an explicit central permission policy. It is a valid
 advisory mission definition; it does not connect to a broker or place trades.
 
@@ -47,8 +47,7 @@ mission handlers. The 21 Web Studio specialists are now registered as
 advisory-only handlers with the single central permission `mission_input.read`.
 They can analyze the objective and dependency outputs supplied to a mission;
 they do not receive browser, filesystem, network, repository, CMS, deployment,
-DNS, TLS, secret, payment, or publishing access. In particular, the browser-tester produces a test plan and does not launch a browser. YouTube/Media
- ingestion, live research, and publishing remain unimplemented.
+DNS, TLS, secret, payment, or publishing access. In particular, the browser-tester produces a test plan and does not launch a browser. YouTube/Media ingestion, live research, and publishing remain unimplemented.
 
 ## Intended execution lifecycle
 
