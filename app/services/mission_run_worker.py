@@ -200,8 +200,14 @@ class MissionRunWorker:
                                 "block": "blocked"}[audit.verdict]
                 self._audit("mission_final_audit_completed", run_id,
                             verdict=audit.verdict, findings_count=len(audit.findings))
-            self.repository.finish(run_id, self.worker_id, final_status)
-            self._audit("mission_run_finished", run_id, status=final_status)
+            self.repository.finish(
+                run_id, self.worker_id, final_status,
+                audit_event={
+                    "event": "mission_run_finished",
+                    "run_id": run_id,
+                    "status": final_status,
+                },
+            )
         except Exception as exc:
             self._audit("mission_run_failed", run_id, error_type=type(exc).__name__)
             self.repository.finish(run_id, self.worker_id, "failed",
