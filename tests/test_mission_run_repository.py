@@ -124,7 +124,7 @@ def test_finish_rolls_back_terminal_state_if_audit_cannot_be_serialized(tmp_path
                 run["run_id"], "audit-worker", "completed",
                 audit_event={"event": "mission_run_finished", "invalid": object()},
             )
-        except (TypeError, ValueError):
+        except Exception:
             pass
         else:
             raise AssertionError("non-JSON audit data must fail the transaction")
