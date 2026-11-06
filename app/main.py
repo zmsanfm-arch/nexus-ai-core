@@ -201,7 +201,7 @@ def create_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": True,
+        "run_submission_available": True,
     }
 
 
@@ -216,7 +216,7 @@ def get_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": True,
+        "run_submission_available": True,
     }
 
 
