@@ -21,6 +21,14 @@ class MissionRepoStub:
         return {**item[1], "created_at": "2026-11-05T00:00:00+00:00"}
 
 
+class PermissionServiceStub:
+    def authorize(self, agent, capability):
+        if capability != "demo.read" or "payload.read" not in agent.get("permissions", []):
+            from app.services.permissions import PermissionDenied
+            raise PermissionDenied("No central permission policy exists.")
+        return "payload.read"
+
+
 class RegistryStub:
     def list_agents(self):
         return [{
@@ -52,6 +60,7 @@ def setup_api(monkeypatch, principal="client-a"):
     monkeypatch.setenv("NEXUS_API_CLIENT_ID", principal)
     monkeypatch.setattr(main, "registry", RegistryStub())
     monkeypatch.setattr(main, "mission_repository", MissionRepoStub())
+    monkeypatch.setattr(main, "mission_permission_service", PermissionServiceStub())
     monkeypatch.setattr(main.store, "append_audit", lambda event: None)
     return TestClient(app), {"Authorization": "Bearer mission-api-token"}
 
@@ -109,3 +118,18 @@ def test_mission_definition_get_reports_run_submission_consistently(monkeypatch)
     body = response.json()
     assert body["execution_status"] == "not_started"
     assert body["run_submission_available"] is True
+
+
+
+def test_mission_definition_api_rejects_capability_without_central_policy(monkeypatch):
+    client, headers = setup_api(monkeypatch)
+    from app import main
+    class DenyAllMissionPermissions:
+        def authorize(self, agent, capability):
+            from app.services.permissions import PermissionDenied
+            raise PermissionDenied("No central permission policy exists.")
+    monkeypatch.setattr(main, "mission_permission_service", DenyAllMissionPermissions())
+
+    response = client.post("/missions", json=mission_payload(), headers=headers)
+    assert response.status_code == 422
+    assert "not authorized" in response.json()["detail"]
