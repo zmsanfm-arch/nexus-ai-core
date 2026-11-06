@@ -22,6 +22,8 @@ def test_canonical_instagram_post_url():
     "https://evil.example/p/abc/",
     "https://user:pass@instagram.com/p/abc/",
     "https://instagram.com/p/abc/?next=https://evil.example",
+    "https://instagram.com/p/abc/?redirect=https://evil.example",
+    "https://instagram.com/p/abc/?igsh=ok&next=https://evil.example",
 ])
 def test_rejects_unsafe_or_non_post_urls(url):
     with pytest.raises(VisualInputError):
@@ -69,3 +71,13 @@ def test_rejects_oversized_and_unknown_media(tmp_path):
         store.capture_media("t", "u", b"not a media file")
     with pytest.raises(VisualInputError):
         store.capture_media("t", "u", b"\x89PNG\r\n\x1a\n" + b"x" * (25 * 1024 * 1024))
+
+
+def test_instagram_tracker_query_is_stripped_but_redirect_query_is_rejected():
+    assert canonical_instagram_url(
+        "https://instagram.com/p/abc/?igsh=tracker"
+    ) == "https://www.instagram.com/p/abc/"
+    with pytest.raises(VisualInputError):
+        canonical_instagram_url(
+            "https://instagram.com/p/abc/?next=https://evil.example"
+        )

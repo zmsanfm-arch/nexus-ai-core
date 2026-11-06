@@ -7,16 +7,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-import mimetypes
 import os
 import re
 import sqlite3
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Protocol
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 MAX_MEDIA_BYTES = 25 * 1024 * 1024
 ALLOWED_HOSTS = {"instagram.com", "www.instagram.com", "m.instagram.com"}
@@ -70,6 +69,15 @@ def canonical_instagram_url(raw_url: str) -> str:
         raise VisualInputError("Credentials and custom ports are not allowed in URLs")
     if not URL_PATTERN.fullmatch(parsed.path):
         raise VisualInputError("URL must identify an Instagram post, reel, or TV item")
+    # Keep only Instagram's harmless share tracker; reject redirect/control parameters.
+    try:
+        query_items = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except ValueError as exc:
+        raise VisualInputError("Malformed URL query string") from exc
+    if any(key != "igsh" for key, _ in query_items) or len(query_items) > 1:
+        raise VisualInputError("Unsupported Instagram URL query parameters")
+    if parsed.fragment:
+        raise VisualInputError("URL fragments are not accepted")
     return urlunsplit(("https", "www.instagram.com", parsed.path.rstrip("/") + "/", "", ""))
 
 
@@ -128,14 +136,6 @@ class VisualIntelligenceStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_visual_scope
                     ON visual_sources(tenant_id, owner_id, captured_at DESC);
-                CREATE TABLE IF NOT EXISTS visual_jobs (
-                    id TEXT PRIMARY KEY,
-                    source_id TEXT NOT NULL REFERENCES visual_sources(id) ON DELETE CASCADE,
-                    tenant_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    attempts INTEGER NOT NULL DEFAULT 0,
-                    created_at REAL NOT NULL
-                );
             """)
 
     @staticmethod
@@ -164,17 +164,23 @@ class VisualIntelligenceStore:
             ).fetchone()
             if existing:
                 return self._row(existing)
-            db.execute(
-                """INSERT INTO visual_sources
-                   (id,tenant_id,owner_id,source_type,canonical_url,caption,labels_json,captured_at,status)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (source_id, tenant_id, owner_id, "instagram_url", canonical,
-                 caption, json.dumps(clean_labels), now, "captured"),
-            )
-            db.execute(
-                "INSERT INTO visual_jobs(id,source_id,tenant_id,status,created_at) VALUES(?,?,?,?,?)",
-                (str(uuid.uuid4()), source_id, tenant_id, "pending", now),
-            )
+            try:
+                db.execute(
+                    """INSERT INTO visual_sources
+                       (id,tenant_id,owner_id,source_type,canonical_url,caption,labels_json,captured_at,status)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (source_id, tenant_id, owner_id, "instagram_url", canonical,
+                     caption, json.dumps(clean_labels), now, "captured"),
+                )
+            except sqlite3.IntegrityError:
+                existing = db.execute(
+                    """SELECT * FROM visual_sources
+                       WHERE tenant_id=? AND owner_id=? AND canonical_url=? AND asset_sha256 IS NULL""",
+                    (tenant_id, owner_id, canonical),
+                ).fetchone()
+                if existing is None:
+                    raise
+                return self._row(existing)
             row = db.execute("SELECT * FROM visual_sources WHERE id=?", (source_id,)).fetchone()
         return self._row(row)
 
@@ -219,18 +225,24 @@ class VisualIntelligenceStore:
             ).fetchone()
             if existing:
                 return self._row(existing)
-            db.execute(
-                """INSERT INTO visual_sources
-                   (id,tenant_id,owner_id,source_type,canonical_url,caption,labels_json,
-                    captured_at,status,asset_sha256,asset_path,mime_type)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (source_id, tenant_id, owner_id, "media_upload", canonical, caption,
-                 json.dumps(clean_labels), now, "queued", digest, str(target), mime),
-            )
-            db.execute(
-                "INSERT INTO visual_jobs(id,source_id,tenant_id,status,created_at) VALUES(?,?,?,?,?)",
-                (str(uuid.uuid4()), source_id, tenant_id, "pending", now),
-            )
+            try:
+                db.execute(
+                    """INSERT INTO visual_sources
+                       (id,tenant_id,owner_id,source_type,canonical_url,caption,labels_json,
+                        captured_at,status,asset_sha256,asset_path,mime_type)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (source_id, tenant_id, owner_id, "media_upload", canonical, caption,
+                     json.dumps(clean_labels), now, "queued", digest, str(target), mime),
+                )
+            except sqlite3.IntegrityError:
+                existing = db.execute(
+                    """SELECT * FROM visual_sources
+                       WHERE tenant_id=? AND owner_id=? AND asset_sha256=?""",
+                    (tenant_id, owner_id, digest),
+                ).fetchone()
+                if existing is None:
+                    raise
+                return self._row(existing)
             row = db.execute("SELECT * FROM visual_sources WHERE id=?", (source_id,)).fetchone()
         return self._row(row)
 
