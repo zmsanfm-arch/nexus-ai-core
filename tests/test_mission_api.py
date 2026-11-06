@@ -98,3 +98,14 @@ def test_mission_definition_api_rejects_undeclared_capability(monkeypatch):
 
     response = client.post("/missions", json=payload, headers=headers)
     assert response.status_code == 422
+
+
+def test_mission_definition_get_reports_run_submission_consistently(monkeypatch):
+    client, headers = setup_api(monkeypatch)
+    created = client.post("/missions", json=mission_payload(), headers=headers)
+    assert created.status_code == 200
+    response = client.get("/missions/demo_mission", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["execution_status"] == "not_started"
+    assert body["execution_available"] is True
