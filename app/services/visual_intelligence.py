@@ -14,7 +14,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import Iterable
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 MAX_MEDIA_BYTES = 25 * 1024 * 1024
@@ -232,7 +232,7 @@ class VisualIntelligenceStore:
                         captured_at,status,asset_sha256,asset_path,mime_type)
                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (source_id, tenant_id, owner_id, "media_upload", canonical, caption,
-                     json.dumps(clean_labels), now, "queued", digest, str(target), mime),
+                     json.dumps(clean_labels), now, "captured", digest, str(target), mime),
                 )
             except sqlite3.IntegrityError:
                 existing = db.execute(
