@@ -47,8 +47,7 @@ mission handlers. The 21 Web Studio specialists are now registered as
 advisory-only handlers with the single central permission `mission_input.read`.
 They can analyze the objective and dependency outputs supplied to a mission;
 they do not receive browser, filesystem, network, repository, CMS, deployment,
-DNS, TLS, secret, payment, or publishing access. In particular, the browser
- tester produces a test plan and does not launch a browser. YouTube/Media
+DNS, TLS, secret, payment, or publishing access. In particular, the browser-tester produces a test plan and does not launch a browser. YouTube/Media
  ingestion, live research, and publishing remain unimplemented.
 
 ## Intended execution lifecycle
