@@ -8,6 +8,7 @@ from app.services.plugin_registry import (
 
 def _manifest(tmp_path, *, status="registered", permissions=("message.send",)):
     path = tmp_path / "plugin.yaml"
+    permission_values = ", ".join(permissions)
     path.write_text(
         "plugin_id: telegram_bridge\n"
         "name: Telegram Bridge\n"
@@ -15,8 +16,8 @@ def _manifest(tmp_path, *, status="registered", permissions=("message.send",)):
         "kind: channel\n"
         f"status: {status}\n"
         "capabilities: [channel.telegram]\n"
-        f"permissions: [{", ".join(permissions)}]\n"
-        f"requested_permissions: [{", ".join(permissions)}]\n"
+        f"permissions: [{permission_values}]\n"
+        f"requested_permissions: [{permission_values}]\n"
         , encoding="utf-8"
     )
     return path
