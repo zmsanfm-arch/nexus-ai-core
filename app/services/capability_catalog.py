@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 import yaml
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
@@ -29,9 +30,7 @@ class ToolDefinition(BaseModel):
             if item.input_schema.get("type") != "object":
                 raise CapabilityDefinitionError("Tool input schema must be an object.")
             return item
-        except (ValidationError, Exception) as exc:
-            if isinstance(exc, CapabilityDefinitionError):
-                raise
+        except (ValidationError, SchemaError) as exc:
             raise CapabilityDefinitionError("Invalid tool definition.") from exc
 
 
