@@ -240,6 +240,58 @@ class SQLAlchemyStore:
         summary["total"] = sum(summary.values())
         return summary
 
+    def complete_queued_task_with_result(self, task_id: str, worker_id: str, task: dict):
+        """Atomically persist the task result and complete its current lease."""
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            queue = session.scalar(select(TaskQueueRecord).where(
+                TaskQueueRecord.task_id == task_id,
+                TaskQueueRecord.status == "leased",
+                TaskQueueRecord.lease_owner == worker_id,
+                TaskQueueRecord.lease_expires_at > now,
+            ).with_for_update())
+            if queue is None:
+                raise ValueError("Task lease is not owned by this worker.")
+            record = session.get(TaskRecord, task_id)
+            if record is None:
+                raise ValueError("Task record is missing.")
+            record.data = dict(task)
+            queue.status = "completed"
+            queue.lease_owner = None
+            queue.lease_expires_at = None
+            queue.last_error = None
+            queue.updated_at = now
+            return "completed"
+
+    def fail_queued_task_with_result(self, task_id: str, worker_id: str, error: str,
+                                     task: dict, max_attempts: int = 3,
+                                     retry_delay_seconds: int = 30):
+        """Atomically persist failure state and release/requeue the owned lease."""
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        now = datetime.now(timezone.utc)
+        with self._lock, self.sessions.begin() as session:
+            queue = session.scalar(select(TaskQueueRecord).where(
+                TaskQueueRecord.task_id == task_id,
+                TaskQueueRecord.status == "leased",
+                TaskQueueRecord.lease_owner == worker_id,
+                TaskQueueRecord.lease_expires_at > now,
+            ).with_for_update())
+            if queue is None:
+                raise ValueError("Task lease is not owned by this worker.")
+            record = session.get(TaskRecord, task_id)
+            if record is None:
+                raise ValueError("Task record is missing.")
+            status = "dead" if queue.attempts >= max_attempts else "queued"
+            record.data = dict(task)
+            queue.last_error = str(error)[:500]
+            queue.lease_owner = None
+            queue.lease_expires_at = None
+            queue.status = status
+            queue.available_at = now + timedelta(seconds=retry_delay_seconds)
+            queue.updated_at = now
+            return status
+
     def complete_queued_task(self, task_id: str, worker_id: str):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
 
@@ -393,6 +445,49 @@ class InMemoryStore:
                 summary[item["status"]] = summary.get(item["status"], 0) + 1
             summary["total"] = sum(summary.values())
             return summary
+
+    def complete_queued_task_with_result(self, task_id, worker_id, task):
+        """Atomically persist the task result and complete its current lease."""
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (item is None or item["status"] != "leased"
+                    or item["lease_owner"] != worker_id
+                    or item["lease_expires_at"] <= now):
+                raise ValueError("Task lease is not owned by this worker.")
+            if task_id not in self.tasks:
+                raise ValueError("Task record is missing.")
+            self.tasks[task_id] = dict(task)
+            item["status"] = "completed"
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["last_error"] = None
+            item["updated_at"] = now
+            return "completed"
+
+    def fail_queued_task_with_result(self, task_id, worker_id, error, task,
+                                     max_attempts=3, retry_delay_seconds=30):
+        """Atomically persist failure state and release/requeue the owned lease."""
+        if max_attempts < 1 or retry_delay_seconds < 0:
+            raise ValueError("Invalid retry policy.")
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            item = self.queue.get(task_id)
+            if (item is None or item["status"] != "leased"
+                    or item["lease_owner"] != worker_id
+                    or item["lease_expires_at"] <= now):
+                raise ValueError("Task lease is not owned by this worker.")
+            if task_id not in self.tasks:
+                raise ValueError("Task record is missing.")
+            status = "dead" if item["attempts"] >= max_attempts else "queued"
+            self.tasks[task_id] = dict(task)
+            item["last_error"] = str(error)[:500]
+            item["lease_owner"] = None
+            item["lease_expires_at"] = None
+            item["status"] = status
+            item["available_at"] = now + timedelta(seconds=retry_delay_seconds)
+            item["updated_at"] = now
+            return status
 
     def complete_queued_task(self, task_id, worker_id):
         return self._finish_queued_task(task_id, worker_id, "completed", None)
