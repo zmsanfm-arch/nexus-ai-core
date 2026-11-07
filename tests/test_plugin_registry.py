@@ -6,7 +6,7 @@ from app.services.plugin_registry import (
 )
 
 
-def _manifest(tmp_path, *, status="registered", permissions=("message.send",)):
+def _manifest(tmp_path, *, status="enabled", permissions=("message.send",)):
     path = tmp_path / "plugin.yaml"
     permission_values = ", ".join(permissions)
     path.write_text(
@@ -63,7 +63,7 @@ def test_plugin_permission_requires_core_allowlist_and_manifest_grant(tmp_path):
 
 def test_disabled_plugin_cannot_be_authorized(tmp_path):
     manifest = load_plugin_manifest(_manifest(tmp_path, status="disabled"))
-    with pytest.raises(PluginPermissionDenied, match="not registered"):
+    with pytest.raises(PluginPermissionDenied, match="not explicitly enabled"):
         PluginPermissionPolicy(frozenset({"message.send"})).authorize(manifest, "message.send")
 
 
