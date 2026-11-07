@@ -63,9 +63,9 @@ Add SQL transaction methods that lock the queue row, verify status=leased, match
 Clients receive contradictory capability metadata for the same persisted definition.
 
 **Required fix**
-Use one consistent response contract. Prefer an explicit field such as `run_submission_available: true` and retain `execution_status: not_started`; do not imply that creating a definition starts execution.
+Use one consistent response contract: both POST and GET return `run_submission_available: true` with `execution_status: not_started`; this indicates that a run can be submitted separately and does not imply that creating a definition starts execution. Validate each declared capability against the central PermissionService before persisting, not only against manifest metadata.
 
-**Status:** Candidate fix and API regression test committed; awaiting CI verification.
+**Status:** Candidate fix uses `run_submission_available` consistently on POST and GET, validates central permission policy before persistence, and includes API regression tests; CI verification pending.
 
 ### F-03 — MEDIUM: mission terminal status and final audit event are separate commits
 
@@ -161,3 +161,22 @@ Only introduce parallel scheduling with bounded concurrency, dependency barriers
 - [ ] Candidate CI is green on the exact candidate SHA.
 - [x] No Web Studio files changed in the PR diff.
 - [ ] External independent security assessment remains scheduled for final handoff.
+
+
+## Implementation addendum — Web Studio advisory activation
+
+After the core audit, the existing `WebStudioSpecialistHandler` and dedicated
+mission-worker registration were verified. The 21 role manifests are now
+registered with one least-privilege grant, `mission_input.read`, and their
+21 role-specific capabilities are mapped through the central
+`PermissionService`. The mission-definition API checks that central policy
+before persisting a mission. This enables advisory model work over the
+user-provided objective and completed dependency outputs only.
+
+This does **not** enable browser automation, filesystem or repository writes,
+network access, CMS access, deployment, DNS/TLS changes, secrets, payments,
+publishing, YouTube ingestion, or live web research. The browser-tester role
+produces a test plan; it does not launch a browser. These handlers are not
+evidence that the full Web Studio UI or production integrations are complete.
+The activation and contract tests are committed on PR #40; CI is still blocked
+by GitHub Actions runner allocation and has not executed the test steps.

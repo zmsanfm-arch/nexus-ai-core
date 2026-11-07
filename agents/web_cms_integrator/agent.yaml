@@ -1,9 +1,11 @@
 agent_id: web_cms_integrator
 name: Web CMS Integrator
 version: 0.1.0
-status: disabled
+status: registered
 mode: advisory
 capabilities:
   - web.cms.integrate
-permissions: []
-requested_permissions: []
+permissions:
+  - mission_input.read
+requested_permissions:
+  - mission_input.read

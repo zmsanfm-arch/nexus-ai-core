@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "integration/**", "feature/**", "audit/**", "ops/**", "perf/**", "hardening/**"]
+    branches: [main, "integration/**", "feat/**", "feature/**", "audit/**", "ops/**", "perf/**", "hardening/**"]
   pull_request:
 
 permissions:
