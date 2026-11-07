@@ -20,6 +20,10 @@ PermissionService, Risk Engine, audit trail, and execution boundaries remain aut
 
 - app/services/plugin_registry.py: strict metadata-only manifest parsing, duplicate detection, read-only discovery, and fail-closed permission intersection.
 - tests/test_plugin_registry.py: validation, duplicate IDs, disabled plugins, and permission escalation tests.
+- app/services/capability_catalog.py: declarative tool and skill contracts with JSON Schema validation.
+- app/services/capability_factory.py: controlled self-extension proposal generation for tools, skills, and plugin manifests; outputs remain disabled and inert.
+- tests/test_capability_catalog.py and tests/test_capability_factory.py: catalog and self-extension validation coverage.
+- docs/CONTROLLED_SELF_EXTENSION.md: proposal-to-activation lifecycle and security boundaries.
 
 ## Deliberately not implemented or enabled
 
@@ -31,14 +35,15 @@ PermissionService, Risk Engine, audit trail, and execution boundaries remain aut
 
 ## Remaining engineering work before runtime activation
 
-1. Add signed/verified package provenance and dependency pinning.
-2. Define versioned tool/provider/channel interfaces and compatibility checks.
-3. Add isolated worker/container execution with resource and network policies.
-4. Bind plugin permissions to tenant/principal and resource scopes.
-5. Add secret references that never expose values to agents or logs.
-6. Add lifecycle controls (install, enable, disable, revoke) with audit events.
-7. Add session ownership and visibility policy for agent-to-agent access.
-8. Add integration, abuse-case, dependency, and sandbox escape tests.
+1. Add durable proposal storage, review APIs, and audit events for every lifecycle transition.
+2. Add signed/verified package provenance and dependency pinning.
+3. Define versioned tool/provider/channel interfaces and compatibility checks.
+4. Add isolated worker/container execution with resource and network policies.
+5. Bind plugin permissions to tenant/principal and resource scopes.
+6. Add secret references that never expose values to agents or logs.
+7. Add lifecycle controls (install, enable, disable, revoke) with audit events.
+8. Enforce session ownership and visibility policy for agent-to-agent access.
+9. Add integration, abuse-case, dependency, and sandbox escape tests.
 
 ## Upstream references
 
