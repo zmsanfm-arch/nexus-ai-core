@@ -10,6 +10,7 @@ from app.schemas import TaskCreate, TaskView, ApprovalDecision, KnowledgeSourceC
 from app.services.mission_contract import MissionDefinition, MissionContractError, compile_mission
 from app.services.mission_repository import MissionAlreadyExists, MissionRepository
 from app.services.mission_run_repository import MissionRunRepository
+from app.services.permissions import PermissionDenied, PermissionService
 from app.services.artifact_store import ArtifactNotFound, LocalArtifactStore
 from app.services.orchestrator import Orchestrator
 from app.services.registry import AgentRegistry
@@ -102,6 +103,7 @@ task_queue = TaskQueueService(store)
 knowledge_store = KnowledgeStoreAdapter(store)
 mission_repository = MissionRepository(store)
 mission_run_repository = MissionRunRepository(store)
+mission_permission_service = PermissionService()
 artifact_store = LocalArtifactStore(os.getenv("NEXUS_ARTIFACT_ROOT", "./data/artifacts"))
 
 
@@ -184,6 +186,13 @@ def create_mission(
                 status_code=422,
                 detail=f"Agent does not declare capability {node.capability}: {node.agent_id}",
             )
+        try:
+            mission_permission_service.authorize(agent, node.capability)
+        except PermissionDenied as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Mission capability is not authorized: {node.capability}",
+            ) from exc
     try:
         mission = mission_repository.create(
             payload.mission_id,
@@ -201,7 +210,7 @@ def create_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": True,
+        "run_submission_available": True,
     }
 
 
@@ -216,7 +225,7 @@ def get_mission(
     return {
         "mission": mission,
         "execution_status": "not_started",
-        "execution_available": True,
+        "run_submission_available": True,
     }
 
 

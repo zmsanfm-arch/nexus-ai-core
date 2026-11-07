@@ -1,9 +1,11 @@
 agent_id: web_brand_visual_designer
 name: Web Brand Visual Designer
 version: 0.1.0
-status: disabled
+status: registered
 mode: advisory
 capabilities:
   - web.visual.identity
-permissions: []
-requested_permissions: []
+permissions:
+  - mission_input.read
+requested_permissions:
+  - mission_input.read

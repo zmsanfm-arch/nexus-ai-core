@@ -21,31 +21,33 @@ Each node contains a unique `node_id`, a registered `agent_id`, an explicit `cap
 
 Registration is not authorization. The runtime separately verifies the agent's enabled status, capability grant, central permission policy, and installed handler before invoking it.
 
-## Example: YouTube channel research
+## Example: supported ICT Mentor mission
 
-This example is deliberately limited to research and planning. It does not claim that the current repository can access YouTube analytics, inspect live trends, generate video assets, or publish videos.
+The following definition uses an enabled specialist handler and
+capabilities that have an explicit central permission policy. It is a valid
+advisory mission definition; it does not connect to a broker or place trades.
 
 ```yaml
-mission_id: youtube_channel_research
-name: YouTube channel research and content plan
-objective: >
-  Evaluate supplied channel examples and reference videos.
-  Produce a source-qualified content strategy and a testable publishing plan.
-max_total_attempts: 3
+mission_id: ict_education_review
+name: ICT education review
+objective: >-
+  Explain the supplied ICT concept, identify assumptions, and list educational
+  references or limitations without producing an execution instruction.
+max_total_attempts: 2
 approval_policy: required_for_external_actions
 nodes:
-  - node_id: research
-    agent_id: research
-    capability: research.read
-  - node_id: analysis
-    agent_id: analysis
-    capability: analysis.review
-    dependencies: [research]
-  - node_id: audit
-    agent_id: auditor
-    capability: audit.review
-    dependencies: [analysis]
+  - node_id: education
+    agent_id: ict_mentor
+    capability: ict.education
+    max_attempts: 2
 ```
+
+The internal `research`, `analysis`, and `auditor` pipeline roles are not
+mission handlers. The 21 Web Studio specialists are now registered as
+advisory-only handlers with the single central permission `mission_input.read`.
+They can analyze the objective and dependency outputs supplied to a mission;
+they do not receive browser, filesystem, network, repository, CMS, deployment,
+DNS, TLS, secret, payment, or publishing access. In particular, the browser-tester produces a test plan and does not launch a browser. YouTube/Media ingestion, live research, and publishing remain unimplemented.
 
 ## Intended execution lifecycle
 
@@ -72,9 +74,9 @@ nodes:
 
 ## Current implementation boundary
 
-Mission definitions can now be submitted through authenticated `POST /missions` and read through principal-scoped `GET /missions/{mission_id}`. Definitions are schema-validated, checked against registered advisory agents and each agent's declared capability grants, and persisted in the SQL database using migration `0004_missions`. A mission ID is unique; reads by another principal return not found. These endpoints only define and retrieve missions: they do not enqueue or execute them. The API explicitly returns `execution_available: false` until a durable execution coordinator and correctly wired specialist/auditor handlers are implemented.
+Mission definitions can now be submitted through authenticated `POST /missions` and read through principal-scoped `GET /missions/{mission_id}`. Definitions are schema-validated, checked against registered advisory agents and each agent's declared capability grants, and persisted in the SQL database using migration `0004_missions`. A mission ID is unique; reads by another principal return not found. These endpoints only define and retrieve missions: they do not enqueue or execute them. Both POST and GET return `run_submission_available: true` and `execution_status: not_started`: a run may be submitted separately, but mission-definition creation does not execute it. The API checks each node against the agent's declared capability and the central PermissionService allowlist before persisting it. The currently enabled mission handlers are ICT Mentor and all 21 Web Studio specialists. Internal Research/Analysis/Auditor pipeline roles are not accepted as mission handlers. Web Studio grants only `mission_input.read`; external side effects remain unavailable.
 
-The current increment adds a sequential advisory-only mission runtime for installed specialist handlers. It checks registered/enabled agent state, declared capability, central permission policy, and handler presence before each node; it passes only completed dependency outputs, bounds specialist output to 16 KiB, and applies bounded per-node attempts. A separately injected auditor receives the bounded combined output and must return a strict `pass`, `revise`, or `block` verdict. Only `pass` yields `status: completed`; missing auditor leaves `nodes_succeeded`, and invalid or failed audit returns `audit_failed`. No connector, credentials, external-action API, or publishing interface is exposed. Dynamic routing, parallel scheduling, persistent mission definitions, UI management, external connectors, media generation, and autonomous publishing remain unimplemented.
+The current increment adds a sequential advisory-only durable mission worker for installed specialist handlers. It checks registered/enabled agent state, declared capability, central permission policy, and handler presence before each node; it passes only completed dependency outputs, bounds specialist output to 16 KiB, and applies bounded per-node attempts. A separately injected auditor receives the bounded combined output and must return a strict `pass`, `revise`, or `block` verdict. Only `pass` yields `status: completed`; missing auditor leaves `nodes_succeeded`, and invalid or failed audit returns `audit_failed`. No connector, credentials, external-action API, or publishing interface is exposed. Dynamic routing, parallel scheduling, persistent mission definitions, UI management, external connectors, media generation, and autonomous publishing remain unimplemented.
 
 
 ## Durable mission execution
@@ -102,8 +104,11 @@ arbitrary remote/model call cannot be guaranteed by a database transaction.
 Handlers must therefore remain advisory and tolerate retries.
 
 The mission worker service is a separate process and must be deployed and
-supervised against the same PostgreSQL database before queued runs will
-progress. The API can durably accept and report runs even while no worker is
+supervised against the same database before queued runs will progress. Only
+capabilities with an explicit central permission mapping and an installed
+handler can execute; unsupported agent/capability pairs fail closed. The 21
+Web Studio handlers are enabled for advisory model responses using only the
+mission objective and dependency outputs. The API can durably accept and report runs even while no worker is
 available. This worker has no external-action, publishing, payment, broker,
 or credential interface. Human approval remains mandatory for any future
 external action implementation.

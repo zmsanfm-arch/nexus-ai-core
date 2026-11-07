@@ -1,9 +1,11 @@
 agent_id: web_browser_tester
 name: Web Browser Tester
 version: 0.1.0
-status: disabled
+status: registered
 mode: advisory
 capabilities:
   - web.browser.test
-permissions: []
-requested_permissions: []
+permissions:
+  - mission_input.read
+requested_permissions:
+  - mission_input.read

@@ -1,8 +1,8 @@
-"""Compile a complete Web Studio website mission without enabling execution.
+"""Compile a complete 21-role Web Studio website mission.
 
-The compiler creates a bounded DAG from the department's 21 specialist roles.
+The compiler creates a bounded DAG from the department's 21 registered advisory roles.
 It requires the caller to supply each role's manifest-declared capability;
-it never invents grants, activates disabled agents, or invokes tools.
+it never invents grants or invokes tools. Runtime authorization remains separate.
 """
 from __future__ import annotations
 
@@ -58,9 +58,9 @@ def build_web_studio_mission(
 ) -> MissionDefinition:
     """Build the 21-role mission from actual manifest capabilities.
 
-    The caller must pass capabilities read from the live registry. Disabled
-    agents remain disabled: this function only compiles a plan and grants
-    nothing. The normal runtime independently checks status and permissions.
+    The caller must pass capabilities read from the live registry. This function
+    only compiles a plan and grants nothing. The normal runtime independently
+    checks enabled status, central permissions, and installed handlers.
     """
     expected = set(WEB_STUDIO_DEPENDENCIES)
     supplied = set(agent_capabilities)
