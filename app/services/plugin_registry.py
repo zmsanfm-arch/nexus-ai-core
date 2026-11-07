@@ -23,7 +23,7 @@ class PluginManifest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
     kind: Literal["tool", "provider", "channel", "hook", "skill"]
-    status: Literal["disabled", "registered"]
+    status: Literal["disabled", "registered", "enabled"]
     capabilities: tuple[str, ...] = ()
     permissions: tuple[str, ...] = ()
     requested_permissions: tuple[str, ...] = ()
@@ -75,8 +75,8 @@ class PluginPermissionPolicy:
         self.allowed_permissions = frozenset(allowed_permissions)
 
     def authorize(self, manifest: PluginManifest, permission: str) -> None:
-        if manifest.status != "registered":
-            raise PluginPermissionDenied("Plugin is not registered as enabled.")
+        if manifest.status != "enabled":
+            raise PluginPermissionDenied("Plugin is not explicitly enabled.")
         if permission not in self.allowed_permissions:
             raise PluginPermissionDenied("Plugin permission is not allowed by central policy.")
         if permission not in manifest.permissions:
